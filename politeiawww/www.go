@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/decred/politeia/politeiawww/api/v1"
+	"github.com/decred/politeia/politeiawww/backup"
 	"github.com/decred/politeia/politeiawww/database"
 	"github.com/decred/politeia/util"
 	"github.com/decred/politeia/util/version"
@@ -1684,6 +1685,8 @@ func _main() error {
 				loadedCfg.HTTPSKey)
 		}()
 	}
+
+	backup.InitBackupServer(p.backend.db)
 
 	// Tell user we are ready to go.
 	log.Infof("Start of day")

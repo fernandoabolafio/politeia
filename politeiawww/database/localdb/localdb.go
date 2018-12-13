@@ -2,6 +2,8 @@ package localdb
 
 import (
 	"encoding/binary"
+	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -262,6 +264,36 @@ func (l *localdb) AllUsers(callbackFn func(u *database.User)) error {
 	iter.Release()
 
 	return iter.Error()
+}
+
+// BackupUsersDatabase backs up the users database while making the database read only
+func (l *localdb) BackupUsersDatabase() ([]database.File, error) {
+	l.Lock()
+	defer l.Unlock()
+
+	// read database files
+	files, err := ioutil.ReadDir(filepath.Join(l.root, UserdbPath))
+	if err != nil {
+		return nil, err
+	}
+
+	// create an array of files from the database directory
+	filesReply := make([]database.File, len(files))
+	for i, f := range files {
+		fmt.Println(f.Name())
+		fn := filepath.Join(l.root, UserdbPath, f.Name())
+
+		b, err := ioutil.ReadFile(fn)
+		if err != nil {
+			return nil, err
+		}
+		filesReply[i] = database.File{
+			Name:    f.Name(),
+			Payload: b,
+		}
+	}
+
+	return filesReply, nil
 }
 
 // Close shuts down the database.  All interface functions MUST return with

@@ -35,6 +35,11 @@ type Identity struct {
 	Deactivated int64                        // Time key was deactivated
 }
 
+type File struct {
+	Name    string
+	Payload []byte
+}
+
 // IsIdentityActive returns true if the identity is active, false otherwise
 func IsIdentityActive(id Identity) bool {
 	return id.Activated != 0 && id.Deactivated == 0
@@ -151,6 +156,9 @@ type Database interface {
 	UserNew(User) error                      // Add new user
 	UserUpdate(User) error                   // Update existing user
 	AllUsers(callbackFn func(u *User)) error // Iterate all users
+
+	// Provide a databse snapshot at a particular point in time
+	BackupUsersDatabase() ([]File, error)
 
 	// Close performs cleanup of the backend.
 	Close() error
