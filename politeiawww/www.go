@@ -116,7 +116,7 @@ func (p *politeiawww) getSessionUser(w http.ResponseWriter, r *http.Request) (*d
 		return nil, err
 	}
 
-	user, err := p.backend.db.UserGetById(pid)
+	user, err := p.backend.UserGetByID(pid)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +208,19 @@ func (p *politeiawww) getIdentity() error {
 	}
 	log.Infof("Identity saved to: %v", p.cfg.RPCIdentityFile)
 
+	return nil
+}
+
+// createDBKey creates a new DB key in <home_directory>/<default_key_name>
+func (p *politeiawww) createDBKey() error {
+	path := filepath.Join(p.cfg.HomeDir, defaultDBKeyFilename)
+
+	err := database.NewEncryptionKey(path)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Database key saved to: %v", path)
 	return nil
 }
 
@@ -1009,7 +1022,7 @@ func (p *politeiawww) handleProposalDetails(w http.ResponseWriter, r *http.Reque
 
 	user, err := p.getSessionUser(w, r)
 	if err != nil {
-		if err != database.ErrUserNotFound {
+		if !IsUserNotFoundError(err) {
 			RespondWithError(w, r, 0,
 				"handleProposalDetails: getSessionUser %v", err)
 			return
@@ -1186,7 +1199,7 @@ func (p *politeiawww) handleCommentsGet(w http.ResponseWriter, r *http.Request) 
 
 	user, err := p.getSessionUser(w, r)
 	if err != nil {
-		if err != database.ErrUserNotFound {
+		if !IsUserNotFoundError(err) {
 			RespondWithError(w, r, 0,
 				"handleCommentsGet: getSessionUser %v", err)
 			return
@@ -1756,6 +1769,10 @@ func _main() error {
 	// Check if this command is being run to fetch the identity.
 	if p.cfg.FetchIdentity {
 		return p.getIdentity()
+	}
+
+	if p.cfg.CreateDBKey {
+		return p.createDBKey()
 	}
 
 	p.backend, err = NewBackend(p.cfg)

@@ -18,13 +18,15 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/decred/politeia/politeiawww/database"
+
 	"github.com/decred/dcrd/hdkeychain"
 	"github.com/decred/politeia/politeiad/api/v1/identity"
 	"github.com/decred/politeia/util/version"
 
 	flags "github.com/btcsuite/go-flags"
 	"github.com/dajohi/goemail"
-	"github.com/decred/politeia/politeiad/api/v1"
+	v1 "github.com/decred/politeia/politeiad/api/v1"
 	"github.com/decred/politeia/politeiawww/sharedconfig"
 	"github.com/decred/politeia/util"
 )
@@ -35,6 +37,7 @@ const (
 	defaultLogFilename      = "politeiawww.log"
 	adminLogFilename        = "admin.log"
 	defaultIdentityFilename = "identity.json"
+	defaultDBKeyFilename    = "dbkey.json"
 
 	defaultMainnetPort = "4443"
 	defaultTestnetPort = "4443"
@@ -46,6 +49,9 @@ const (
 
 	defaultVoteDurationMin = uint32(2016)
 	defaultVoteDurationMax = uint32(4032)
+
+	levelDBOption     = "leveldb"
+	cockroachDBOption = "cockroachdb"
 
 	// dust value can be found increasing the amount value until we get false
 	// from IsDustAmount function. Amounts can not be lower than dust
@@ -130,6 +136,13 @@ type config struct {
 	CacheHost                string `long:"cachehost" description:"Cache ip:port"`
 	CacheCertDir             string `long:"cachecertdir" description:"Directory containing SSL client certificates"`
 	CacheRootCert            string `long:"cacherootcert" description:"File containing SSL root certificate"`
+	Database                 string `long:"database" description:"The database to be used: leveldb or cockroachdb (default is leveldb)"`
+	DBKey                    *database.EncryptionKey
+	DBHost                   string `long:"dbhost" description:"Database ip:port"`
+	DBCertDir                string `long:"dbcertdir" description:"Directory containing SSL client certificates"`
+	DBRootCert               string `long:"dbrootcert" description:"File containing SSL root certificate"`
+	DBKeyFilename            string `long:"dbkeyfilename" description:"File containing the secret key for database encryption"`
+	CreateDBKey              bool   `long:"createdbkey" description:"Create a new database key in the provided path"`
 	FetchIdentity            bool   `long:"fetchidentity" description:"Whether or not politeiawww fetches the identity from politeiad."`
 	WebServerAddress         string `long:"webserveraddress" description:"Address for the Politeia web server; it should have this format: <scheme>://<host>[:<port>]"`
 	Interactive              string `long:"interactive" description:"Set to i-know-this-is-a-bad-idea to turn off interactive mode during --fetchidentity."`
@@ -175,6 +188,17 @@ func validLogLevel(logLevel string) bool {
 	case "error":
 		fallthrough
 	case "critical":
+		return true
+	}
+	return false
+}
+
+// validDBOption returns wheter or not dbOption is a valid database option.
+func validDBOption(dbOption string) bool {
+	switch dbOption {
+	case levelDBOption:
+		return true
+	case cockroachDBOption:
 		return true
 	}
 	return false
@@ -310,6 +334,38 @@ func initSMTP(cfg *config) error {
 		}
 	}
 
+	return nil
+}
+
+// loadDbKey tries to load the database encription key. If it cannot find a
+// key it will prompt instructions on how to generate a new one.
+func loadDBKey(cfg *config) error {
+	if cfg.CreateDBKey {
+		// Don't try to load the db key from the existiting file if the
+		// caller is trying to create a new one.
+		return nil
+	}
+
+	// Setup the key path.
+	if cfg.DBKeyFilename == "" {
+		return fmt.Errorf("dbkeyfilename cannot be blank")
+	}
+	cfg.DBKeyFilename = cleanAndExpandPath(cfg.DBKeyFilename)
+
+	// Check if the key file exists.
+	if !util.FileExists(cfg.DBKeyFilename) {
+		return fmt.Errorf("You must specify a valid database key or create " +
+			"a new one by using the --createdbkey flag")
+	}
+
+	// Load the DB key
+	ek, err := database.LoadEncryptionKey(cfg.DBKeyFilename)
+	if err != nil {
+		return err
+	}
+	cfg.DBKey = ek
+
+	log.Infof("Database key loaded from: %v", cfg.DBKeyFilename)
 	return nil
 }
 
@@ -552,6 +608,20 @@ func loadConfig() (*config, []string, error) {
 	cfg.CacheCertDir = cleanAndExpandPath(cfg.CacheCertDir)
 	cfg.CacheRootCert = cleanAndExpandPath(cfg.CacheRootCert)
 
+	cfg.DBCertDir = cleanAndExpandPath(cfg.DBCertDir)
+	cfg.DBRootCert = cleanAndExpandPath(cfg.DBRootCert)
+
+	// Set leveldb as the default option when the db config option has not been
+	// specified
+	if cfg.Database == "" {
+		cfg.Database = levelDBOption
+	}
+
+	// Check if database option is valid
+	if !validDBOption(cfg.Database) {
+		return nil, nil, fmt.Errorf("Invalid database option")
+	}
+
 	// Special show command to list supported subsystems and exit.
 	if cfg.DebugLevel == "show" {
 		fmt.Println("Supported subsystems", supportedSubsystems())
@@ -642,6 +712,10 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	if err := loadIdentity(&cfg); err != nil {
+		return nil, nil, err
+	}
+
+	if err := loadDBKey(&cfg); err != nil {
 		return nil, nil, err
 	}
 
