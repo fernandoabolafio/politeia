@@ -52,6 +52,56 @@ func convertWWWIdentityFromDatabaseIdentity(identity database.Identity) www.User
 	}
 }
 
+// // Store new user.
+// //
+// // UserNew satisfies the backend interface.
+func (b *backend) UserNew(u database.User) (*uuid.UUID, error) {
+	u.ID = uuid.New()
+	p, err := database.EncodeUser(u)
+	if err != nil {
+		return nil, err
+	}
+
+	return &u.ID, b.db.Put(u.ID.String(), p)
+}
+
+// UserGet returns a user record if found in the database.
+//
+// UserGet satisfies the backend interface.
+func (b *backend) UserGet(email string) (*database.User, error) {
+	return nil, fmt.Errorf("user blow")
+}
+
+// UserGetByUsername returns a user record given its username, if found in the database.
+//
+// UserGetByUsername satisfies the backend interface.
+func (b *backend) UserGetByUsername(username string) (*database.User, error) {
+	return nil, nil
+}
+
+// Update existing user.
+//
+// UserUpdate satisfies the backend interface.
+func (b *backend) UserUpdate(u database.User) error {
+	return nil
+}
+
+// AllUsers
+func (b *backend) AllUsers(callbackFn func(u *database.User)) error {
+	return nil
+}
+
+// UserGetById returns a user record given its id, if found in the database.
+//
+// UserGetById satisfies the backend interface.
+func (b *backend) UserGetById(id uuid.UUID) (*database.User, error) {
+	p, err := b.db.Get(id.String())
+	if err != nil {
+		return nil, err
+	}
+	return database.DecodeUser(p)
+}
+
 func (b *backend) getUserByIDStr(userIDStr string) (*database.User, error) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -60,7 +110,7 @@ func (b *backend) getUserByIDStr(userIDStr string) (*database.User, error) {
 		}
 	}
 
-	user, err := b.db.UserGetById(userID)
+	user, err := b.UserGetById(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +162,7 @@ func (b *backend) ProcessEditUser(eu *www.EditUser, user *database.User) (*www.E
 	}
 
 	// Update the user in the database.
-	err := b.db.UserUpdate(*user)
+	err := b.UserUpdate(*user)
 	if err != nil {
 		return nil, err
 	}

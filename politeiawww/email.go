@@ -233,7 +233,7 @@ func (b *backend) emailUsersForVettedProposal(
 
 	return b.sendEmail(subject, body, func(msg *goemail.Message) error {
 		// Add user emails to the goemail.Message
-		return b.db.AllUsers(func(user *database.User) {
+		return b.AllUsers(func(user *database.User) {
 			// Don't notify the user under certain conditions.
 			if user.NewUserPaywallTx == "" || user.Deactivated ||
 				user.ID == adminUser.ID || user.ID == authorUser.ID ||
@@ -280,7 +280,7 @@ func (b *backend) emailUsersForEditedProposal(
 
 	return b.sendEmail(subject, body, func(msg *goemail.Message) error {
 		// Add user emails to the goemail.Message
-		return b.db.AllUsers(func(user *database.User) {
+		return b.AllUsers(func(user *database.User) {
 			// Don't notify the user under certain conditions.
 			if user.NewUserPaywallTx == "" || user.Deactivated ||
 				user.ID == authorUser.ID ||
@@ -342,7 +342,7 @@ func (b *backend) emailUsersForProposalVoteStarted(
 
 	return b.sendEmail(subject, body, func(msg *goemail.Message) error {
 		// Add user emails to the goemail.Message
-		return b.db.AllUsers(func(user *database.User) {
+		return b.AllUsers(func(user *database.User) {
 			// Don't notify the user under certain conditions.
 			if user.NewUserPaywallTx == "" || user.Deactivated ||
 				user.ID == adminUser.ID ||
@@ -382,7 +382,7 @@ func (b *backend) emailAdminsForNewSubmittedProposal(token string, propName stri
 
 	return b.sendEmail(subject, body, func(msg *goemail.Message) error {
 		// Add admin emails to the goemail.Message
-		return b.db.AllUsers(func(user *database.User) {
+		return b.AllUsers(func(user *database.User) {
 			if !user.Admin || user.Deactivated ||
 				(user.EmailNotifications&
 					uint64(v1.NotificationEmailAdminProposalNew) == 0) {
@@ -421,7 +421,7 @@ func (b *backend) emailAdminsForProposalVoteAuthorized(
 
 	return b.sendEmail(subject, body, func(msg *goemail.Message) error {
 		// Add admin emails to the goemail.Message
-		return b.db.AllUsers(func(user *database.User) {
+		return b.AllUsers(func(user *database.User) {
 			if !user.Admin || user.Deactivated ||
 				(user.EmailNotifications&
 					uint64(v1.NotificationEmailAdminProposalVoteAuthorized) == 0) {

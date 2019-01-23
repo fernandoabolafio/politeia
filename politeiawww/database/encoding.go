@@ -1,0 +1,149 @@
+package database
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"time"
+
+	"github.com/decred/politeia/util"
+	"github.com/marcopeereboom/sbox"
+)
+
+// EncodeVersion encodes Version into a JSON byte slice.
+func EncodeVersion(version Version) ([]byte, error) {
+	// make sure it has record type and version specified
+	version.RecordType = RecordTypeVersion
+	version.RecordVersion = DatabaseVersion
+
+	b, err := json.Marshal(version)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// DecodeVersion decodes a JSON byte slice into a Version.
+func DecodeVersion(payload []byte) (*Version, error) {
+	var version Version
+
+	err := json.Unmarshal(payload, &version)
+	if err != nil {
+		return nil, err
+	}
+
+	if version.RecordVersion != DatabaseVersion {
+		return nil, fmt.Errorf("DecodeVersion: wrong record version")
+	}
+	if version.RecordType != RecordTypeVersion {
+		return nil, fmt.Errorf("DecodeVersion: wrong record type")
+	}
+
+	return &version, nil
+}
+
+// EncodeUser encodes User into a JSON byte slice.
+func EncodeUser(u User) ([]byte, error) {
+	// make sure it user has record type and version specified
+	u.RecordType = RecordTypeUser
+	u.RecordVersion = DatabaseVersion
+
+	b, err := json.Marshal(u)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// DecodeUser decodes a JSON byte slice into a User.
+func DecodeUser(payload []byte) (*User, error) {
+	var u User
+
+	err := json.Unmarshal(payload, &u)
+	if err != nil {
+		return nil, err
+	}
+
+	if u.RecordVersion != DatabaseVersion {
+		return nil, fmt.Errorf("DecodeUser: wrong record version")
+	}
+	if u.RecordType != RecordTypeUser {
+		return nil, fmt.Errorf("DecodeUser: wrong record type")
+	}
+
+	return &u, nil
+}
+
+// EncodeEncryptionKey encodes EncryptionKey into a JSON byte slice.
+func EncodeEncryptionKey(ek EncryptionKey) ([]byte, error) {
+	k, err := json.Marshal(ek)
+	if err != nil {
+		return nil, err
+	}
+
+	return k, nil
+}
+
+// DecodeEncryptionKey decodes a JSON byte slice into EncryptionKey
+func DecodeEncryptionKey(payload []byte) (*EncryptionKey, error) {
+	var ek EncryptionKey
+
+	err := json.Unmarshal(payload, &ek)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ek, nil
+}
+
+// SaveEncryptionKey saves a EncryptionKey into the provided filename
+func SaveEncryptionKey(ek EncryptionKey, filename string) error {
+	k, err := EncodeEncryptionKey(ek)
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(filename, k, 0600)
+}
+
+// LoadEncryptionKey loads a EncryptionKey from the provided filename
+func LoadEncryptionKey(filename string) (*EncryptionKey, error) {
+	k, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	ek, err := DecodeEncryptionKey(k)
+	if err != nil {
+		return nil, err
+	}
+
+	return ek, nil
+}
+
+// ResolveEncryptionKey creates and save a new encryption key in case
+// there isn't one yet in the default home directory
+func ResolveEncryptionKey(keyPath string) error {
+
+	encryptionKeyPath := filepath.Join(keyPath, DefaultEncryptionKeyFilename)
+
+	if !util.FileExists(encryptionKeyPath) {
+		// create a new encryption key
+		secretKey, err := sbox.NewKey()
+		if err != nil {
+			return err
+		}
+
+		err = SaveEncryptionKey(EncryptionKey{
+			Key:  *secretKey,
+			Time: time.Now().Unix(),
+		}, encryptionKeyPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

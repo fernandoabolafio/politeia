@@ -14,7 +14,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/politeia/politeiad/api/v1/identity"
 	www "github.com/decred/politeia/politeiawww/api/v1"
-	"github.com/decred/politeia/politeiawww/database/localdb"
+	"github.com/decred/politeia/politeiawww/database/leveldb"
 	"github.com/decred/politeia/util"
 	"github.com/google/uuid"
 )
@@ -54,7 +54,12 @@ func createBackend(t *testing.T) *backend {
 	}
 
 	// Setup database
-	db, err := localdb.New(cfg.DataDir)
+	err = leveldb.CreateLevelDB(cfg.HomeDir, cfg.DataDir)
+	if err != nil {
+		t.Fatalf("setup database: %v", err)
+	}
+
+	db, err := leveldb.NewLevelDB(cfg.HomeDir, cfg.DataDir)
 	if err != nil {
 		t.Fatalf("setup database: %v", err)
 	}

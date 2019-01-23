@@ -32,16 +32,15 @@ require (
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
 	github.com/jrick/logrotate v1.0.0
 	github.com/lib/pq v1.0.0 // indirect
-	github.com/onsi/ginkgo v1.7.0 // indirect
+	github.com/marcopeereboom/sbox v0.0.0-20190125180204-32a7c85e429a
 	github.com/otiai10/copy v0.0.0-20180813032824-7e9a647135a1
 	github.com/otiai10/mint v1.2.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967
-	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/subosito/norma v0.0.0-20140814002436-523a8b2df221
 	github.com/syndtr/goleveldb v0.0.0-20180815032940-ae2bd5eed72d
-	golang.org/x/crypto v0.0.0-20181001203147-e3636079e1a4
-	golang.org/x/net v0.0.0-20181005035420-146acd28ed58
-	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
+	golang.org/x/crypto v0.0.0-20190123085648-057139ce5d2b
+	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
+	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
 	google.golang.org/grpc v1.15.0
 )

@@ -5,17 +5,18 @@
 package database
 
 import (
-	"encoding/hex"
 	"errors"
 
 	"github.com/decred/politeia/politeiad/api/v1/identity"
 	"github.com/google/uuid"
 )
 
+type RecordTypeT int
+
 var (
-	// ErrUserNotFound indicates that a user name was not found in the
-	// database.
-	ErrUserNotFound = errors.New("user not found")
+	// ErrUserNotFound indicates that a provided key was not found
+	// in the database
+	ErrNotFound = errors.New("key not found")
 
 	// ErrUserExists indicates that a user already exists in the database.
 	ErrUserExists = errors.New("user already exists")
@@ -25,38 +26,56 @@ var (
 
 	// ErrShutdown is emitted when the database is shutting down.
 	ErrShutdown = errors.New("database is shutting down")
+
+	// ErrWrongVersion is emitted when the version in the database
+	// does not match version of the interface implementation.
+	ErrWrongVersion = errors.New("wrong database version")
+
+	// ErrLoadingEncryptionKey is emitted when the encryption key cannot be
+	// loaded from theprivded path
+	ErrLoadingEncryptionKey = errors.New("encryption could not be loaded")
 )
+
+const (
+	// DatabaseVersion is the current version of the database
+	DatabaseVersion uint32 = 1
+
+	// DatabaseVersionKey is the key used to map the database version
+	DatabaseVersionKey = "userversion"
+
+	// DefaultEncryptionKeyFilename is the name of the file where
+	// the encryption key is stored
+	DefaultEncryptionKeyFilename = "dbencryptionkey.json"
+
+	LastPaywallAddressIndex = "lastpaywallindex"
+
+	RecordTypeInvalid RecordTypeT = 0
+	RecordTypeUser    RecordTypeT = 1
+	RecordTypeVersion RecordTypeT = 2
+)
+
+// EncryptionKey wraps a key used for encrypting/decrypting the database
+// data and the time when it was created
+type EncryptionKey struct {
+	Key  [32]byte // Key used for encryption
+	Time int64    // Time key was created
+}
 
 // Identity wraps an ed25519 public key and timestamps to indicate if it is
 // active.  If deactivated != 0 then the key is no longer valid.
 type Identity struct {
 	Key         [identity.PublicKeySize]byte // ed25519 public key
-	Activated   int64                        // Time key as activated for use
+	Activated   int64                        // Time key was activated for use
 	Deactivated int64                        // Time key was deactivated
 }
 
-// IsIdentityActive returns true if the identity is active, false otherwise
-func IsIdentityActive(id Identity) bool {
-	return id.Activated != 0 && id.Deactivated == 0
-}
+// Version contains the database version.
+type Version struct {
+	RecordType    RecordTypeT `json:"recordtype"`
+	RecordVersion uint32      `json:"recordversion"`
 
-// ActiveIdentity returns a the current active key.  If there is no active
-// valid key the call returns all 0s and false.
-func ActiveIdentity(i []Identity) ([identity.PublicKeySize]byte, bool) {
-	for _, v := range i {
-		if IsIdentityActive(v) {
-			return v.Key, true
-		}
-	}
-
-	return [identity.PublicKeySize]byte{}, false
-}
-
-// ActiveIdentityString returns a string representation of the current active
-// key.  If there is no active valid key the call returns all 0s and false.
-func ActiveIdentityString(i []Identity) (string, bool) {
-	key, ok := ActiveIdentity(i)
-	return hex.EncodeToString(key[:]), ok
+	Version uint32 `json:"version"` // Database version
+	Time    int64  `json:"time"`    // Time of record creation
 }
 
 // A proposal paywall allows the user to purchase proposal credits.  Proposal
@@ -90,6 +109,9 @@ type ProposalCredit struct {
 
 // User record.
 type User struct {
+	RecordType    RecordTypeT
+	RecordVersion uint32
+
 	ID                              uuid.UUID // Unique user uuid
 	Email                           string    // Email address + lookup key.
 	Username                        string    // Unique username
@@ -142,16 +164,26 @@ type User struct {
 	SpentProposalCredits []ProposalCredit
 }
 
+// XXX Needs to be removed
 // Database interface that is required by the web server.
-type Database interface {
-	// User functions
-	UserGet(string) (*User, error)           // Return user record, key is email
-	UserGetByUsername(string) (*User, error) // Return user record given the username
-	UserGetById(uuid.UUID) (*User, error)    // Return user record given its id
-	UserNew(User) error                      // Add new user
-	UserUpdate(User) error                   // Update existing user
-	AllUsers(callbackFn func(u *User)) error // Iterate all users
+// type Database interface {
+// 	// User functions
+// 	UserGet(string) (*User, error)           // Return user record, key is email
+// 	UserGetByUsername(string) (*User, error) // Return user record given the username
+// 	UserGetById(uuid.UUID) (*User, error)    // Return user record given its id
+// 	UserNew(User) error                      // Add new user
+// 	UserUpdate(User) error                   // Update existing user
+// 	AllUsers(callbackFn func(u *User)) error // Iterate all users
 
-	// Close performs cleanup of the backend.
+// 	// Close performs cleanup of the backend.
+// 	Close() error
+// }
+
+// Database interface
+type Database interface {
+	Put(string, []byte) error   // Set a value by key
+	Get(string) ([]byte, error) // Get a database value by key
+
+	Open() error
 	Close() error
 }

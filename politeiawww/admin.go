@@ -109,7 +109,7 @@ func (b *backend) ProcessManageUser(mu *v1.ManageUser, adminUser *database.User)
 	}
 
 	// Update the user in the database.
-	err = b.db.UserUpdate(*user)
+	err = b.UserUpdate(*user)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (b *backend) ProcessUsers(users *v1.Users) (*v1.UsersReply, error) {
 	emailQuery := strings.ToLower(users.Email)
 	usernameQuery := formatUsername(users.Username)
 
-	err := b.db.AllUsers(func(user *database.User) {
+	err := b.AllUsers(func(user *database.User) {
 		reply.TotalUsers++
 		userMatches := true
 
@@ -291,7 +291,7 @@ func (b *backend) ProcessUserPaymentsRescan(upr v1.UserPaymentsRescan) (*v1.User
 	// proposal credits since the start of this request. Failure to
 	// relookup the user record here could result in adding proposal
 	// credits to the user's account that have already been spent.
-	user, err = b.db.UserGet(user.Email)
+	user, err = b.UserGet(user.Email)
 	if err != nil {
 		return nil, fmt.Errorf("UserGet %v", err)
 	}
@@ -299,7 +299,7 @@ func (b *backend) ProcessUserPaymentsRescan(upr v1.UserPaymentsRescan) (*v1.User
 	user.UnspentProposalCredits = append(user.UnspentProposalCredits,
 		newCredits...)
 
-	err = b.db.UserUpdate(*user)
+	err = b.UserUpdate(*user)
 	if err != nil {
 		return nil, fmt.Errorf("UserUpdate %v", err)
 	}
