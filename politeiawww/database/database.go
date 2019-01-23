@@ -142,6 +142,7 @@ type User struct {
 	SpentProposalCredits []ProposalCredit
 }
 
+// XXX Needs to be removed
 // Database interface that is required by the web server.
 type Database interface {
 	// User functions
@@ -154,4 +155,10 @@ type Database interface {
 
 	// Close performs cleanup of the backend.
 	Close() error
+}
+
+// Db interface
+type Db interface {
+	Set(string, []byte) error           // Set a value by key
+	Get(string, string) (error, []byte) // Get a database value by key
 }
