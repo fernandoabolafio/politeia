@@ -24,7 +24,7 @@ import (
 
 	flags "github.com/btcsuite/go-flags"
 	"github.com/dajohi/goemail"
-	"github.com/decred/politeia/politeiad/api/v1"
+	v1 "github.com/decred/politeia/politeiad/api/v1"
 	"github.com/decred/politeia/politeiawww/sharedconfig"
 	"github.com/decred/politeia/util"
 )
@@ -46,6 +46,8 @@ const (
 
 	defaultVoteDurationMin = uint32(2016)
 	defaultVoteDurationMax = uint32(4032)
+
+	defaultDatabaseOption = "leveldb"
 
 	// dust value can be found increasing the amount value until we get false
 	// from IsDustAmount function. Amounts can not be lower than dust
@@ -130,6 +132,10 @@ type config struct {
 	CacheHost                string `long:"cachehost" description:"Cache ip:port"`
 	CacheCertDir             string `long:"cachecertdir" description:"Directory containing SSL client certificates"`
 	CacheRootCert            string `long:"cacherootcert" description:"File containing SSL root certificate"`
+	Database                 string `long:"database" description:"The database to be used: leveldb or cockroachdb (default is leveldb)"`
+	DBHost                   string `long:"dbhost" description:"Database ip:port"`
+	DBCertDir                string `long:"dbcertdir" description:"Directory containing SSL client certificates"`
+	DBRootCert               string `long:"dbrootcert" description:"File containing SSL root certificate"`
 	FetchIdentity            bool   `long:"fetchidentity" description:"Whether or not politeiawww fetches the identity from politeiad."`
 	WebServerAddress         string `long:"webserveraddress" description:"Address for the Politeia web server; it should have this format: <scheme>://<host>[:<port>]"`
 	Interactive              string `long:"interactive" description:"Set to i-know-this-is-a-bad-idea to turn off interactive mode during --fetchidentity."`
@@ -175,6 +181,17 @@ func validLogLevel(logLevel string) bool {
 	case "error":
 		fallthrough
 	case "critical":
+		return true
+	}
+	return false
+}
+
+// validDBOption returns wheter or not dbOption is a valid database option.
+func validDBOption(dbOption string) bool {
+	switch dbOption {
+	case "cockroachdb":
+		fallthrough
+	case "leveldb":
 		return true
 	}
 	return false
@@ -551,6 +568,18 @@ func loadConfig() (*config, []string, error) {
 
 	cfg.CacheCertDir = cleanAndExpandPath(cfg.CacheCertDir)
 	cfg.CacheRootCert = cleanAndExpandPath(cfg.CacheRootCert)
+
+	cfg.DBCertDir = cleanAndExpandPath(cfg.DBCertDir)
+	cfg.DBRootCert = cleanAndExpandPath(cfg.DBRootCert)
+
+	// Check if database option is valid
+	if cfg.Database != "" {
+		if !validDBOption(cfg.Database) {
+			return nil, nil, fmt.Errorf("Invalid database option")
+		}
+	} else {
+		cfg.Database = defaultDatabaseOption
+	}
 
 	// Special show command to list supported subsystems and exit.
 	if cfg.DebugLevel == "show" {

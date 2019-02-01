@@ -26,6 +26,7 @@ import (
 	www "github.com/decred/politeia/politeiawww/api/v1"
 	"github.com/decred/politeia/politeiawww/database"
 	usercockroachdb "github.com/decred/politeia/politeiawww/database/cockroachdb"
+	"github.com/decred/politeia/politeiawww/database/leveldb"
 	"github.com/decred/politeia/util"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -2004,38 +2005,50 @@ func getDecredPlugin(testnet bool) Plugin {
 	return decredPlugin
 }
 
+func setupDatabase(b *backend) error {
+	cfg := b.cfg
+	net := filepath.Base(cfg.DataDir)
+	// Setup cockroach db for users database
+	if cfg.Database == "leveldb" {
+		err := leveldb.CreateLevelDB(cfg.HomeDir, cfg.DataDir)
+		if err != nil {
+			log.Debugf("could not create level db")
+			return err
+		}
+
+		db, err := leveldb.NewLevelDB(cfg.HomeDir, cfg.DataDir)
+		if err != nil {
+			log.Debugf("could not instantiate level db")
+			return err
+		}
+		b.db = db
+		log.Infof("Users database is using leveldb")
+		return nil
+	} else if cfg.Database == "cockroachdb" {
+		err := usercockroachdb.CreateCDB(cfg.CacheHost, net,
+			cfg.CacheRootCert, cfg.CacheCertDir, cfg.HomeDir)
+		if err != nil {
+			log.Debugf("could not create cockroach db")
+			return err
+		}
+
+		db, err := usercockroachdb.NewCDB(cockroachdb.UserPoliteiawww, cfg.CacheHost,
+			net, cfg.CacheRootCert, cfg.CacheCertDir, cfg.HomeDir)
+		if err != nil {
+			return err
+		}
+		log.Infof("Users database is using cockroachdb")
+		b.db = db
+		return nil
+	}
+
+	return fmt.Errorf("Invalid database configuration")
+}
+
 // NewBackend creates a new backend context for use in www and tests.
 func NewBackend(cfg *config) (*backend, error) {
-	// Setup database.
-
-	/// XXX leveldb setup
-	// err := leveldb.CreateLevelDB(cfg.HomeDir, cfg.DataDir)
-	// if err != nil {
-	// 	log.Debugf("could not create level db")
-	// 	return nil, err
-	// }
-
-	// db, err := leveldb.NewLevelDB(cfg.HomeDir, cfg.DataDir)
-	// if err != nil {
-	// 	log.Debugf("could not instantiate level db")
-	// 	return nil, err
-	// }
 
 	net := filepath.Base(cfg.DataDir)
-
-	// Setup cockroach db for users database
-	err := usercockroachdb.CreateCDB(cfg.CacheHost, net,
-		cfg.CacheRootCert, cfg.CacheCertDir, cfg.HomeDir)
-	if err != nil {
-		log.Debugf("could not create cockroach db")
-		return nil, err
-	}
-
-	db, err := usercockroachdb.NewCDB(cockroachdb.UserPoliteiawww, cfg.CacheHost,
-		net, cfg.CacheRootCert, cfg.CacheCertDir, cfg.HomeDir)
-	if err != nil {
-		return nil, nil
-	}
 
 	// Setup cache connection
 	cockroachdb.UseLogger(cockroachdbLog)
@@ -2052,12 +2065,16 @@ func NewBackend(cfg *config) (*backend, error) {
 
 	// Context
 	b := &backend{
-		db:              db,
 		cache:           cdb,
 		cfg:             cfg,
 		userPubkeys:     make(map[string]string),
 		userPaywallPool: make(map[uuid.UUID]paywallPoolMember),
 		commentScores:   make(map[string]int64),
+	}
+
+	err = setupDatabase(b)
+	if err != nil {
+		return nil, err
 	}
 
 	// Register plugins with cache
