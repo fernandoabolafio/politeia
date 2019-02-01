@@ -16,7 +16,7 @@ func createUnverifiedUser(t *testing.T, b *backend) (*database.User, *identity.F
 	assertSuccess(t, err)
 	validateVerificationToken(t, nur.VerificationToken)
 
-	user, _ := b.UserGet(nu.Email)
+	user, _ := b.UserGetByEmail(nu.Email)
 	return user, id
 }
 
@@ -35,7 +35,7 @@ func verifyUser(t *testing.T, b *backend, user *database.User, identity *identit
 func TestProcessManageUser(t *testing.T) {
 	b := createBackend(t)
 	nu, _ := createAndVerifyUser(t, b)
-	adminUser, _ := b.UserGet(nu.Email)
+	adminUser, _ := b.UserGetByEmail(nu.Email)
 	user, identity := createUnverifiedUser(t, b)
 
 	// Expire the new user verification token

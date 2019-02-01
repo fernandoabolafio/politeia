@@ -272,7 +272,7 @@ func (b *backend) getUsernameById(userIdStr string) string {
 		return ""
 	}
 
-	user, err := b.UserGetById(userId)
+	user, err := b.UserGetByID(userId)
 	if err != nil {
 		return ""
 	}
@@ -282,7 +282,7 @@ func (b *backend) getUsernameById(userIdStr string) string {
 
 func (b *backend) login(l *www.Login) loginReplyWithError {
 	// Get user from db.
-	user, err := b.UserGet(l.Email)
+	user, err := b.UserGetByEmail(l.Email)
 	if err != nil {
 		if err == database.ErrNotFound {
 			log.Debugf("Login failure for %v: user not found in database",
@@ -935,7 +935,7 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 		expiry int64
 	)
 
-	existingUser, err := b.UserGet(u.Email)
+	existingUser, err := b.UserGetByEmail(u.Email)
 	if err == nil {
 		// Check if the user is already verified.
 		if existingUser.NewUserVerificationToken == nil {
@@ -1019,7 +1019,6 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 	} else {
 		// Save the new user in the db.
 		uid, err = b.UserNew(newUser)
-		fmt.Printf("look me %v", err)
 	}
 
 	// Error handling for the db write.
@@ -1039,7 +1038,7 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 	//
 	// Even if existingUser is non-nil, this will bring it up-to-date
 	// with the new information inserted via newUser.
-	existingUser, err = b.UserGetById(*uid)
+	existingUser, err = b.UserGetByID(*uid)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve account info for %v: %v",
 			newUser.Email, err)
@@ -1066,7 +1065,7 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 // hasn't expired.  On success it returns database user record.
 func (b *backend) ProcessVerifyNewUser(u www.VerifyNewUser) (*database.User, error) {
 	// Check that the user already exists.
-	user, err := b.UserGet(u.Email)
+	user, err := b.UserGetByEmail(u.Email)
 	if err != nil {
 		if err == database.ErrNotFound {
 			log.Debugf("VerifyNewUser failure for %v: user not found",
@@ -1160,7 +1159,7 @@ func (b *backend) ProcessResendVerification(rv *www.ResendVerification) (*www.Re
 	rvr := www.ResendVerificationReply{}
 
 	// Get user from db.
-	user, err := b.UserGet(rv.Email)
+	user, err := b.UserGetByEmail(rv.Email)
 	if err != nil {
 		if err == database.ErrNotFound {
 			log.Debugf("ResendVerification failure for %v: user not found",
@@ -1418,7 +1417,7 @@ func (b *backend) ProcessChangeUsername(email string, cu www.ChangeUsername) (*w
 	var reply www.ChangeUsernameReply
 
 	// Get user from db.
-	user, err := b.UserGet(email)
+	user, err := b.UserGetByEmail(email)
 	if err != nil {
 		return nil, err
 	}
@@ -1455,7 +1454,7 @@ func (b *backend) ProcessChangePassword(email string, cp www.ChangePassword) (*w
 	var reply www.ChangePasswordReply
 
 	// Get user from db.
-	user, err := b.UserGet(email)
+	user, err := b.UserGetByEmail(email)
 	if err != nil {
 		return nil, err
 	}
@@ -1500,7 +1499,7 @@ func (b *backend) ProcessResetPassword(rp www.ResetPassword) (*www.ResetPassword
 	var reply www.ResetPasswordReply
 
 	// Get user from db.
-	user, err := b.UserGet(rp.Email)
+	user, err := b.UserGetByEmail(rp.Email)
 	if err != nil {
 		if err == database.ErrInvalidEmail {
 			return nil, www.UserError{
@@ -1549,7 +1548,7 @@ func (b *backend) ProcessUserProposalCredits(user *database.User) (*www.UserProp
 // ProcessUserProposals returns a page of proposals for the given user.
 func (b *backend) ProcessUserProposals(up *www.UserProposals, isCurrentUser, isAdminUser bool) (*www.UserProposalsReply, error) {
 	// Verify user exists
-	_, err := b.getUserByIDStr(up.UserId)
+	_, err := b.UserGetByIDStr(up.UserId)
 	if err != nil {
 		return nil, err
 	}
@@ -2076,7 +2075,7 @@ func NewBackend(cfg *config) (*backend, error) {
 	// Setup pubkey-userid map
 	err = b.initUserPubkeys()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initUserPubkeys: %v", err)
 	}
 
 	// Setup comment scores map

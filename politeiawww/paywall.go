@@ -110,7 +110,7 @@ func (b *backend) checkForUserPayments(pool map[uuid.UUID]paywallPoolMember) (bo
 	var userIDsToRemove []uuid.UUID
 
 	for userID, poolMember := range pool {
-		user, err := b.UserGetById(userID)
+		user, err := b.UserGetByID(userID)
 		if err != nil {
 			if err == database.ErrShutdown {
 				// The database is shutdown, so stop the thread.
@@ -184,7 +184,7 @@ func (b *backend) checkForProposalPayments(pool map[uuid.UUID]paywallPoolMember)
 	// poolMembers from the pool while in the middle of polling poolMember
 	// addresses.
 	for userID, poolMember := range pool {
-		user, err := b.UserGetById(userID)
+		user, err := b.UserGetByID(userID)
 		if err != nil {
 			if err == database.ErrShutdown {
 				// The database is shutdown, so stop the thread.

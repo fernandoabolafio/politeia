@@ -116,7 +116,7 @@ func (p *politeiawww) getSessionUser(w http.ResponseWriter, r *http.Request) (*d
 		return nil, err
 	}
 
-	user, err := p.backend.UserGetById(pid)
+	user, err := p.backend.UserGetByID(pid)
 	if err != nil {
 		return nil, err
 	}

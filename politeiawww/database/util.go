@@ -7,11 +7,11 @@ import (
 	"github.com/decred/politeia/politeiad/api/v1/identity"
 )
 
-// isUserRecord returns true if the given key is a user record,
+// IsUserRecord returns true if the given key is a user record,
 // and false otherwise. This is helpful when iterating the user records
 // because the DB contains some non-user records.
-func isUserRecord(key string) bool {
-	return key != DatabaseVersionKey && key != LastPaywallAddressIndex
+func IsUserRecord(key string) bool {
+	return key != DatabaseVersionKey && key != LastPaywallAddressIndexKey
 }
 
 // IsIdentityActive returns true if the identity is active, false otherwise

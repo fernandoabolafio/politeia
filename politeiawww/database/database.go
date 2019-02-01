@@ -11,10 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// RecordTypeT indetifies a record struct type
 type RecordTypeT int
 
 var (
-	// ErrUserNotFound indicates that a provided key was not found
+	// ErrNotFound indicates that a provided key was not found
 	// in the database
 	ErrNotFound = errors.New("key not found")
 
@@ -34,6 +35,14 @@ var (
 	// ErrLoadingEncryptionKey is emitted when the encryption key cannot be
 	// loaded from theprivded path
 	ErrLoadingEncryptionKey = errors.New("encryption could not be loaded")
+
+	// ErrWrongRecordVersion is emitted when the record version in the
+	// database does not match the version of the interface implementation.
+	ErrWrongRecordVersion = errors.New("wrong record version")
+
+	// ErrWrongRecordType is emitted when the record type in the database
+	// does not match the expected type
+	ErrWrongRecordType = errors.New("wrong record type")
 )
 
 const (
@@ -47,11 +56,14 @@ const (
 	// the encryption key is stored
 	DefaultEncryptionKeyFilename = "dbencryptionkey.json"
 
-	LastPaywallAddressIndex = "lastpaywallindex"
+	// LastPaywallAddressIndexKey is the key used to map the last paywall index
+	// for a user
+	LastPaywallAddressIndexKey = "lastpaywallindex"
 
-	RecordTypeInvalid RecordTypeT = 0
-	RecordTypeUser    RecordTypeT = 1
-	RecordTypeVersion RecordTypeT = 2
+	RecordTypeInvalid            RecordTypeT = 0 // Invalid record type
+	RecordTypeUser               RecordTypeT = 1 // User record type
+	RecordTypeVersion            RecordTypeT = 2 // Version record Type
+	RecordTypeLastPaywallAddrIdx RecordTypeT = 3 // LastPaywallAddressIndex record type
 )
 
 // EncryptionKey wraps a key used for encrypting/decrypting the database
@@ -69,16 +81,25 @@ type Identity struct {
 	Deactivated int64                        // Time key was deactivated
 }
 
+// LastPaywallAddressIndex wraps the next paywall index to be used for
+// the next user record inserted.
+type LastPaywallAddressIndex struct {
+	RecordType    RecordTypeT `json:"recordtype"`    // Record type
+	RecordVersion uint32      `json:"recordversion"` // Database interface version
+
+	Index uint64 `json:"index"`
+}
+
 // Version contains the database version.
 type Version struct {
-	RecordType    RecordTypeT `json:"recordtype"`
-	RecordVersion uint32      `json:"recordversion"`
+	RecordType    RecordTypeT `json:"recordtype"`    // Record type
+	RecordVersion uint32      `json:"recordversion"` // Database interface version
 
 	Version uint32 `json:"version"` // Database version
 	Time    int64  `json:"time"`    // Time of record creation
 }
 
-// A proposal paywall allows the user to purchase proposal credits.  Proposal
+// ProposalPaywall allows the user to purchase proposal credits.  Proposal
 // paywalls are only valid for one tx.  The number of proposal credits created
 // is determined by dividing the tx amount by the credit price.  Proposal
 // paywalls expire after a set duration. politeiawww polls the paywall address
@@ -94,7 +115,7 @@ type ProposalPaywall struct {
 	NumCredits  uint64 // Number of proposal credits created by payment tx
 }
 
-// A proposal credit allows the user to submit a new proposal.  Credits are
+// ProposalCredit allows the user to submit a new proposal.  Credits are
 // created when a user sends a payment to a proposal paywall.  A credit is
 // automatically spent when a user submits a new proposal.  When a credit is
 // spent, it is updated with the proposal's censorship token and moved to the
@@ -109,8 +130,8 @@ type ProposalCredit struct {
 
 // User record.
 type User struct {
-	RecordType    RecordTypeT
-	RecordVersion uint32
+	RecordType    RecordTypeT // Record type
+	RecordVersion uint32      // Database interface version
 
 	ID                              uuid.UUID // Unique user uuid
 	Email                           string    // Email address + lookup key.
@@ -164,25 +185,12 @@ type User struct {
 	SpentProposalCredits []ProposalCredit
 }
 
-// XXX Needs to be removed
-// Database interface that is required by the web server.
-// type Database interface {
-// 	// User functions
-// 	UserGet(string) (*User, error)           // Return user record, key is email
-// 	UserGetByUsername(string) (*User, error) // Return user record given the username
-// 	UserGetById(uuid.UUID) (*User, error)    // Return user record given its id
-// 	UserNew(User) error                      // Add new user
-// 	UserUpdate(User) error                   // Update existing user
-// 	AllUsers(callbackFn func(u *User)) error // Iterate all users
-
-// 	// Close performs cleanup of the backend.
-// 	Close() error
-// }
-
 // Database interface
 type Database interface {
-	Put(string, []byte) error   // Set a value by key
-	Get(string) ([]byte, error) // Get a database value by key
+	Put(string, []byte) error                     // Set a value by key
+	Get(string) ([]byte, error)                   // Get a database value by key
+	Has(string) (bool, error)                     // Returns true if the database has a key
+	GetAll(callbackFn func(string, []byte)) error // Iterate all database values
 
 	Open() error
 	Close() error

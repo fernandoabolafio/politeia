@@ -2,7 +2,6 @@ package database
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"time"
@@ -11,7 +10,22 @@ import (
 	"github.com/marcopeereboom/sbox"
 )
 
-// EncodeVersion encodes Version into a JSON byte slice.
+func verifyRecordVersion(recordVersion, dbVersion uint32) error {
+	if recordVersion != dbVersion {
+		return ErrWrongRecordVersion
+	}
+	return nil
+}
+
+func verifyRecordType(recordType, expectedType RecordTypeT) error {
+	if recordType != expectedType {
+		return ErrWrongRecordType
+	}
+	return nil
+}
+
+// EncodeVersion encodes Version into a JSON byte slice. It also adds the
+// record type and version before encoding.
 func EncodeVersion(version Version) ([]byte, error) {
 	// make sure it has record type and version specified
 	version.RecordType = RecordTypeVersion
@@ -34,17 +48,21 @@ func DecodeVersion(payload []byte) (*Version, error) {
 		return nil, err
 	}
 
-	if version.RecordVersion != DatabaseVersion {
-		return nil, fmt.Errorf("DecodeVersion: wrong record version")
+	err = verifyRecordVersion(version.RecordVersion, DatabaseVersion)
+	if err != nil {
+		return nil, err
 	}
-	if version.RecordType != RecordTypeVersion {
-		return nil, fmt.Errorf("DecodeVersion: wrong record type")
+
+	err = verifyRecordType(version.RecordType, RecordTypeVersion)
+	if err != nil {
+		return nil, err
 	}
 
 	return &version, nil
 }
 
-// EncodeUser encodes User into a JSON byte slice.
+// EncodeUser encodes User into a JSON byte slice. It also adds the
+// record type and record version before encoding.
 func EncodeUser(u User) ([]byte, error) {
 	// make sure it user has record type and version specified
 	u.RecordType = RecordTypeUser
@@ -58,6 +76,45 @@ func EncodeUser(u User) ([]byte, error) {
 	return b, nil
 }
 
+// EncodeLastPaywallAddressIndex encodes User into a JSON byte slice.
+// It also adds the record type and version before encoding.
+func EncodeLastPaywallAddressIndex(lp LastPaywallAddressIndex) ([]byte, error) {
+	// make sure it user has record type and version specified
+	lp.RecordType = RecordTypeLastPaywallAddrIdx
+	lp.RecordVersion = DatabaseVersion
+
+	b, err := json.Marshal(lp)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// DecodeLastPaywallAddressIndex decodes a JSON byte slice into a
+// LastPaywallAddressIndex. It also adds the record type and version
+// before encoding.
+func DecodeLastPaywallAddressIndex(payload []byte) (*LastPaywallAddressIndex, error) {
+	var lp LastPaywallAddressIndex
+
+	err := json.Unmarshal(payload, &lp)
+	if err != nil {
+		return nil, err
+	}
+
+	err = verifyRecordVersion(lp.RecordVersion, DatabaseVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	err = verifyRecordType(lp.RecordType, RecordTypeLastPaywallAddrIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &lp, nil
+}
+
 // DecodeUser decodes a JSON byte slice into a User.
 func DecodeUser(payload []byte) (*User, error) {
 	var u User
@@ -67,11 +124,14 @@ func DecodeUser(payload []byte) (*User, error) {
 		return nil, err
 	}
 
-	if u.RecordVersion != DatabaseVersion {
-		return nil, fmt.Errorf("DecodeUser: wrong record version")
+	err = verifyRecordVersion(u.RecordVersion, DatabaseVersion)
+	if err != nil {
+		return nil, err
 	}
-	if u.RecordType != RecordTypeUser {
-		return nil, fmt.Errorf("DecodeUser: wrong record type")
+
+	err = verifyRecordType(u.RecordType, RecordTypeUser)
+	if err != nil {
+		return nil, err
 	}
 
 	return &u, nil

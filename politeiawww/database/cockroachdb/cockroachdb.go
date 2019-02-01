@@ -118,21 +118,72 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 	var keyValue KeyValue
 	err := c.usersdb.Where("key = ?", key).First(&keyValue).Error
 	if gorm.IsRecordNotFoundError(err) {
-		fmt.Printf("iha 1 %v", err)
 		return nil, database.ErrNotFound
 	}
 	if err != nil {
-		fmt.Printf("iha 2 %v", err)
 		return nil, err
 	}
 
 	payload, _, err := sbox.Decrypt(&c.encryptionKey.Key, keyValue.Payload)
 	if err != nil {
-		fmt.Printf("iha 3 %v", err)
 		return nil, err
 	}
 
 	return payload, nil
+}
+
+func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
+	log.Tracef("GetAll")
+
+	c.RLock()
+	shutdown := c.shutdown
+	c.RUnlock()
+
+	if shutdown {
+		return database.ErrShutdown
+	}
+
+	var values []KeyValue
+	err := c.usersdb.Find(&values).Error
+	if err != nil {
+		return err
+	}
+	for _, v := range values {
+		// decrypt payload
+		decValue, _, err := sbox.Decrypt(&c.encryptionKey.Key, v.Payload)
+		if err != nil {
+			return err
+		}
+		// fmt.Printf("KEY: %v, VALUE: ")
+		callbackFn(v.Key, decValue)
+	}
+
+	return nil
+}
+
+// Has returns true if the database does contains the given key.
+func (c *cockroachdb) Has(key string) (bool, error) {
+	log.Tracef("Has: %v", key)
+
+	c.RLock()
+	shutdown := c.shutdown
+	c.RUnlock()
+
+	if shutdown {
+		return false, database.ErrShutdown
+	}
+
+	var keyValue KeyValue
+	err := c.usersdb.Where("key = ?", key).First(&keyValue).Error
+	if gorm.IsRecordNotFoundError(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+
 }
 
 // Close shuts down the database.  All interface functions MUST return with

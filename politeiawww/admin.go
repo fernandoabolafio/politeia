@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/decred/politeia/politeiawww/api/v1"
+	v1 "github.com/decred/politeia/politeiawww/api/v1"
 	"github.com/decred/politeia/politeiawww/database"
 	"github.com/decred/politeia/util"
 	"github.com/google/uuid"
@@ -60,7 +60,7 @@ func (b *backend) logAdminProposalAction(adminUser *database.User, token, action
 
 func (b *backend) ProcessManageUser(mu *v1.ManageUser, adminUser *database.User) (*v1.ManageUserReply, error) {
 	// Fetch the database user.
-	user, err := b.getUserByIDStr(mu.UserID)
+	user, err := b.UserGetByIDStr(mu.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func (b *backend) ProcessUsers(users *v1.Users) (*v1.UsersReply, error) {
 // to check for any payments that may have been missed by paywall polling.
 func (b *backend) ProcessUserPaymentsRescan(upr v1.UserPaymentsRescan) (*v1.UserPaymentsRescanReply, error) {
 	// Lookup user
-	user, err := b.getUserByIDStr(upr.UserID)
+	user, err := b.UserGetByIDStr(upr.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func (b *backend) ProcessUserPaymentsRescan(upr v1.UserPaymentsRescan) (*v1.User
 	// proposal credits since the start of this request. Failure to
 	// relookup the user record here could result in adding proposal
 	// credits to the user's account that have already been spent.
-	user, err = b.UserGet(user.Email)
+	user, err = b.UserGetByEmail(user.Email)
 	if err != nil {
 		return nil, fmt.Errorf("UserGet %v", err)
 	}

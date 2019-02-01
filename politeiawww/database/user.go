@@ -23,7 +23,7 @@ package database
 // // UserGet returns a user record if found in the database.
 // //
 // // UserGet satisfies the backend interface.
-// func (l *localdb) UserGet(email string) (*database.User, error) {
+// func (l *localdb) UserGetByEmail(email string) (*database.User, error) {
 // 	return nil, nil
 // }
 
@@ -37,7 +37,7 @@ package database
 // // UserGetById returns a user record given its id, if found in the database.
 // //
 // // UserGetById satisfies the backend interface.
-// func (l *localdb) UserGetById(id uuid.UUID) (*database.User, error) {
+// func (l *localdb) UserGetByID(id uuid.UUID) (*database.User, error) {
 // 	return nil, nil
 // }
 
@@ -113,7 +113,7 @@ package database
 // // UserGet returns a user record if found in the database.
 // //
 // // UserGet satisfies the backend interface.
-// func (l *localdb) UserGet(email string) (*database.User, error) {
+// func (l *localdb) UserGetByEmail(email string) (*database.User, error) {
 // 	l.Lock()
 // 	defer l.Unlock()
 
@@ -138,7 +138,7 @@ package database
 
 // // UserGetByUsername returns a user record given its username, if found in the database.
 // //
-// // UserGetByUsername satisfies the backend interface.
+// UserGetByUsername satisfies the backend interface.
 // func (l *localdb) UserGetByUsername(username string) (*database.User, error) {
 // 	l.Lock()
 // 	defer l.Unlock()
@@ -175,7 +175,7 @@ package database
 // // UserGetById returns a user record given its id, if found in the database.
 // //
 // // UserGetById satisfies the backend interface.
-// func (l *localdb) UserGetById(id uuid.UUID) (*database.User, error) {
+// func (l *localdb) UserGetByID(id uuid.UUID) (*database.User, error) {
 // 	l.Lock()
 // 	defer l.Unlock()
 

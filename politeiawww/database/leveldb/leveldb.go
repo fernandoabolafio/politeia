@@ -32,6 +32,14 @@ type leveldb struct {
 func (l *leveldb) Put(key string, payload []byte) error {
 	log.Tracef("Put %v:", key)
 
+	l.RLock()
+	shutdown := l.shutdown
+	l.RUnlock()
+
+	if shutdown {
+		return database.ErrShutdown
+	}
+
 	// encrypt payload
 	packed, err := sbox.Encrypt(database.DatabaseVersion, &l.encryptionKey.Key, payload)
 	if err != nil {
@@ -44,6 +52,14 @@ func (l *leveldb) Put(key string, payload []byte) error {
 // Get returns a payload by a given key
 func (l *leveldb) Get(key string) ([]byte, error) {
 	log.Tracef("Get: %v", key)
+
+	l.RLock()
+	shutdown := l.shutdown
+	l.RUnlock()
+
+	if shutdown {
+		return nil, database.ErrShutdown
+	}
 
 	packed, err := l.userdb.Get([]byte(key), nil)
 	if err == ldb.ErrNotFound {
@@ -59,6 +75,46 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 	}
 
 	return payload, nil
+}
+
+func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
+	l.RLock()
+	shutdown := l.shutdown
+	l.RUnlock()
+
+	if shutdown {
+		return database.ErrShutdown
+	}
+
+	iter := l.userdb.NewIterator(nil, nil)
+	for iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// decrypt value
+		decValue, _, err := sbox.Decrypt(&l.encryptionKey.Key, value)
+		if err != nil {
+			return err
+		}
+
+		callbackFn(string(key), decValue)
+	}
+	iter.Release()
+
+	return iter.Error()
+}
+
+// Has returns true if the database does contains the given key.
+func (l *leveldb) Has(key string) (bool, error) {
+	l.RLock()
+	shutdown := l.shutdown
+	l.RUnlock()
+
+	if shutdown {
+		return false, database.ErrShutdown
+	}
+
+	return l.userdb.Has([]byte(key), nil)
 }
 
 // Open opens a new database connection and make sure there is a version record
