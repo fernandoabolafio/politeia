@@ -1,3 +1,7 @@
+// Copyright (c) 2017-2019 The Decred developers
+// Use of this source code is governed by an ISC
+// license that can be found in the LICENSE file.
+
 package cockroachdb
 
 import (
@@ -6,8 +10,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/marcopeereboom/sbox"
 
 	"github.com/decred/politeia/politeiawww/database"
 	"github.com/jinzhu/gorm"
@@ -62,16 +64,16 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 		return database.ErrShutdown
 	}
 
-	// run Put within a transaction
+	// Run put within a transaction
 	tx := c.usersdb.Begin()
 
-	// encrypt payload
-	packed, err := sbox.Encrypt(database.DatabaseVersion, &c.encryptionKey.Key, payload)
+	// Encrypt payload
+	packed, err := database.Encrypt(database.DatabaseVersion, c.encryptionKey.Key, payload)
 	if err != nil {
 		return err
 	}
 
-	// try to find the record with the provided key
+	// Try to find the record with the provided key
 	var keyValue KeyValue
 	err = tx.Where("key = ?", key).First(&keyValue).Error
 	if gorm.IsRecordNotFoundError(err) {
@@ -114,7 +116,7 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 		return nil, database.ErrShutdown
 	}
 
-	// find user by id
+	// Find user by id
 	var keyValue KeyValue
 	err := c.usersdb.Where("key = ?", key).First(&keyValue).Error
 	if gorm.IsRecordNotFoundError(err) {
@@ -124,7 +126,7 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
-	payload, _, err := sbox.Decrypt(&c.encryptionKey.Key, keyValue.Payload)
+	payload, _, err := database.Decrypt(c.encryptionKey.Key, keyValue.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -150,11 +152,10 @@ func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 	}
 	for _, v := range values {
 		// decrypt payload
-		decValue, _, err := sbox.Decrypt(&c.encryptionKey.Key, v.Payload)
+		decValue, _, err := database.Decrypt(c.encryptionKey.Key, v.Payload)
 		if err != nil {
 			return err
 		}
-		// fmt.Printf("KEY: %v, VALUE: ")
 		callbackFn(v.Key, decValue)
 	}
 
@@ -274,7 +275,7 @@ func CreateCDB(host, net, rootCert, certDir, keyDir string) error {
 		return err
 	}
 
-	// see if we need to create a new encryption key
+	// See if we need to create a new encryption key
 	err = database.ResolveEncryptionKey(keyDir)
 	if err != nil {
 		return err

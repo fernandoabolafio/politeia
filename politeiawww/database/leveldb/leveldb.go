@@ -1,3 +1,7 @@
+// Copyright (c) 2017-2019 The Decred developers
+// Use of this source code is governed by an ISC
+// license that can be found in the LICENSE file.
+
 package leveldb
 
 import (
@@ -6,7 +10,6 @@ import (
 	"time"
 
 	"github.com/decred/politeia/politeiawww/database"
-	"github.com/marcopeereboom/sbox"
 	ldb "github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -41,7 +44,7 @@ func (l *leveldb) Put(key string, payload []byte) error {
 	}
 
 	// encrypt payload
-	packed, err := sbox.Encrypt(database.DatabaseVersion, &l.encryptionKey.Key, payload)
+	packed, err := database.Encrypt(database.DatabaseVersion, l.encryptionKey.Key, payload)
 	if err != nil {
 		return err
 	}
@@ -69,7 +72,7 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
-	payload, _, err := sbox.Decrypt(&l.encryptionKey.Key, packed)
+	payload, _, err := database.Decrypt(l.encryptionKey.Key, packed)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +95,7 @@ func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 		value := iter.Value()
 
 		// decrypt value
-		decValue, _, err := sbox.Decrypt(&l.encryptionKey.Key, value)
+		decValue, _, err := database.Decrypt(l.encryptionKey.Key, value)
 		if err != nil {
 			return err
 		}

@@ -1,13 +1,11 @@
+// Copyright (c) 2017-2019 The Decred developers
+// Use of this source code is governed by an ISC
+// license that can be found in the LICENSE file.
+
 package database
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"path/filepath"
-	"time"
-
-	"github.com/decred/politeia/util"
-	"github.com/marcopeereboom/sbox"
 )
 
 func verifyRecordVersion(recordVersion, dbVersion uint32) error {
@@ -27,7 +25,7 @@ func verifyRecordType(recordType, expectedType RecordTypeT) error {
 // EncodeVersion encodes Version into a JSON byte slice. It also adds the
 // record type and version before encoding.
 func EncodeVersion(version Version) ([]byte, error) {
-	// make sure it has record type and version specified
+	// Make sure it has record type and version specified
 	version.RecordType = RecordTypeVersion
 	version.RecordVersion = DatabaseVersion
 
@@ -64,7 +62,7 @@ func DecodeVersion(payload []byte) (*Version, error) {
 // EncodeUser encodes User into a JSON byte slice. It also adds the
 // record type and record version before encoding.
 func EncodeUser(u User) ([]byte, error) {
-	// make sure it user has record type and version specified
+	// Make sure it  has record type and version specified
 	u.RecordType = RecordTypeUser
 	u.RecordVersion = DatabaseVersion
 
@@ -79,7 +77,7 @@ func EncodeUser(u User) ([]byte, error) {
 // EncodeLastPaywallAddressIndex encodes User into a JSON byte slice.
 // It also adds the record type and version before encoding.
 func EncodeLastPaywallAddressIndex(lp LastPaywallAddressIndex) ([]byte, error) {
-	// make sure it user has record type and version specified
+	// Make sure it has record type and version specified
 	lp.RecordType = RecordTypeLastPaywallAddrIdx
 	lp.RecordVersion = DatabaseVersion
 
@@ -157,53 +155,4 @@ func DecodeEncryptionKey(payload []byte) (*EncryptionKey, error) {
 	}
 
 	return &ek, nil
-}
-
-// SaveEncryptionKey saves a EncryptionKey into the provided filename
-func SaveEncryptionKey(ek EncryptionKey, filename string) error {
-	k, err := EncodeEncryptionKey(ek)
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(filename, k, 0600)
-}
-
-// LoadEncryptionKey loads a EncryptionKey from the provided filename
-func LoadEncryptionKey(filename string) (*EncryptionKey, error) {
-	k, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	ek, err := DecodeEncryptionKey(k)
-	if err != nil {
-		return nil, err
-	}
-
-	return ek, nil
-}
-
-// ResolveEncryptionKey creates and save a new encryption key in case
-// there isn't one yet in the default home directory
-func ResolveEncryptionKey(keyPath string) error {
-
-	encryptionKeyPath := filepath.Join(keyPath, DefaultEncryptionKeyFilename)
-
-	if !util.FileExists(encryptionKeyPath) {
-		// create a new encryption key
-		secretKey, err := sbox.NewKey()
-		if err != nil {
-			return err
-		}
-
-		err = SaveEncryptionKey(EncryptionKey{
-			Key:  *secretKey,
-			Time: time.Now().Unix(),
-		}, encryptionKeyPath)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
