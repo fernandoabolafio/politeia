@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/decred/politeia/util"
 	"github.com/marcopeereboom/sbox"
 )
 
@@ -49,27 +48,16 @@ func LoadEncryptionKey(filename string) (*EncryptionKey, error) {
 	return ek, nil
 }
 
-// ResolveEncryptionKey creates and save a new encryption key in case
-// there isn't one yet in the default home directory
-func ResolveEncryptionKey(keyPath string) error {
-
-	encryptionKeyPath := filepath.Join(keyPath, DefaultEncryptionKeyFilename)
-
-	if !util.FileExists(encryptionKeyPath) {
-		// create a new encryption key
-		secretKey, err := sbox.NewKey()
-		if err != nil {
-			return err
-		}
-
-		err = SaveEncryptionKey(EncryptionKey{
-			Key:  *secretKey,
-			Time: time.Now().Unix(),
-		}, encryptionKeyPath)
-		if err != nil {
-			return err
-		}
+// NewEncryptionKey creates and save a new encription key in the provided
+// directory.
+func NewEncryptionKey(dir string) error {
+	secretKey, err := sbox.NewKey()
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return SaveEncryptionKey(EncryptionKey{
+		Key:  *secretKey,
+		Time: time.Now().Unix(),
+	}, filepath.Join(dir, DefaultEncryptionKeyFilename))
 }

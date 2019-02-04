@@ -1999,14 +1999,15 @@ func setupDatabase(b *backend) error {
 	cfg := b.cfg
 	net := filepath.Base(cfg.DataDir)
 	// Setup cockroach db for users database
-	if cfg.Database == "leveldb" {
-		err := leveldb.CreateLevelDB(cfg.HomeDir, cfg.DataDir)
+	switch cfg.Database {
+	case levelDBOption:
+		err := leveldb.CreateLevelDB(cfg.DataDir)
 		if err != nil {
 			log.Debugf("could not create level db")
 			return err
 		}
 
-		db, err := leveldb.NewLevelDB(cfg.HomeDir, cfg.DataDir)
+		db, err := leveldb.NewLevelDB(cfg.DataDir, cfg.DBKey)
 		if err != nil {
 			log.Debugf("could not instantiate level db")
 			return err
@@ -2014,25 +2015,25 @@ func setupDatabase(b *backend) error {
 		b.db = db
 		log.Infof("Users database is using leveldb")
 		return nil
-	} else if cfg.Database == "cockroachdb" {
-		err := usercockroachdb.CreateCDB(cfg.CacheHost, net,
-			cfg.CacheRootCert, cfg.CacheCertDir, cfg.HomeDir)
+	case cockroachDBOption:
+		err := usercockroachdb.CreateCDB(cfg.DBHost, net,
+			cfg.DBRootCert, cfg.DBCertDir)
 		if err != nil {
 			log.Debugf("could not create cockroach db")
 			return err
 		}
 
-		db, err := usercockroachdb.NewCDB(cockroachdb.UserPoliteiawww, cfg.CacheHost,
-			net, cfg.CacheRootCert, cfg.CacheCertDir, cfg.HomeDir)
+		db, err := usercockroachdb.NewCDB(cockroachdb.UserPoliteiawww, cfg.DBHost,
+			net, cfg.DBRootCert, cfg.DBCertDir, cfg.DBKey)
 		if err != nil {
 			return err
 		}
 		log.Infof("Users database is using cockroachdb")
 		b.db = db
 		return nil
+	default:
+		return fmt.Errorf("Invalid database configuration")
 	}
-
-	return fmt.Errorf("Invalid database configuration")
 }
 
 // NewBackend creates a new backend context for use in www and tests.

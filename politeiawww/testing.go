@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/decred/politeia/politeiawww/database"
+
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/politeia/politeiad/api/v1/identity"
 	www "github.com/decred/politeia/politeiawww/api/v1"
@@ -53,13 +55,20 @@ func createBackend(t *testing.T) *backend {
 		TestNet:       true,
 	}
 
+	// Create a database key
+	err = database.NewEncryptionKey(dir)
+	if err != nil {
+		t.Fatalf("setup database key: %v", err)
+	}
+	key := filepath.Join(dir, database.DefaultEncryptionKeyFilename)
+
 	// Setup database
-	err = leveldb.CreateLevelDB(cfg.HomeDir, cfg.DataDir)
+	err = leveldb.CreateLevelDB(cfg.DataDir)
 	if err != nil {
 		t.Fatalf("setup database: %v", err)
 	}
 
-	db, err := leveldb.NewLevelDB(cfg.HomeDir, cfg.DataDir)
+	db, err := leveldb.NewLevelDB(cfg.DataDir, key)
 	if err != nil {
 		t.Fatalf("setup database: %v", err)
 	}

@@ -163,9 +163,8 @@ func (l *leveldb) Close() error {
 }
 
 // CreateLevelDB creates a new leveldb database if does not already exist.
-// The encryption key is also created in case it does not already exist.
-func CreateLevelDB(homeDir, dataDir string) error {
-	log.Tracef("leveldb Create: %v %v", homeDir, dataDir)
+func CreateLevelDB(dataDir string) error {
+	log.Tracef("leveldb Create: %v %v", dataDir)
 
 	// db openFile is called to make sure the db will be created in case it
 	// doesn not exist
@@ -179,23 +178,16 @@ func CreateLevelDB(homeDir, dataDir string) error {
 		return err
 	}
 
-	// resolve the encryption key to make sure it is create in case
-	// it doens't exist
-	err = database.ResolveEncryptionKey(homeDir)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // NewLevelDB creates a new leveldb instance. It must be called after the Create
 // method, otherwise it will throw an error.
-func NewLevelDB(homeDir, dataDir string) (*leveldb, error) {
-	log.Tracef("leveldb New: %v %v", homeDir, dataDir)
+func NewLevelDB(dataDir, dbKey string) (*leveldb, error) {
+	log.Tracef("leveldb New: %v %v", dataDir, dbKey)
 
 	// load encryption key
-	ek, err := database.LoadEncryptionKey(filepath.Join(homeDir, database.DefaultEncryptionKeyFilename))
+	ek, err := database.LoadEncryptionKey(dbKey)
 	if err != nil {
 		return nil, database.ErrLoadingEncryptionKey
 	}

@@ -34,7 +34,7 @@ var (
 
 	// ErrLoadingEncryptionKey is emitted when the encryption key cannot be
 	// loaded from theprivded path
-	ErrLoadingEncryptionKey = errors.New("encryption could not be loaded")
+	ErrLoadingEncryptionKey = errors.New("database encryption key could not be loaded")
 
 	// ErrWrongRecordVersion is emitted when the record version in the
 	// database does not match the version of the interface implementation.
@@ -54,7 +54,7 @@ const (
 
 	// DefaultEncryptionKeyFilename is the name of the file where
 	// the encryption key is stored
-	DefaultEncryptionKeyFilename = "dbencryptionkey.json"
+	DefaultEncryptionKeyFilename = "dbkey.json"
 
 	// LastPaywallAddressIndexKey is the key used to map the last paywall index
 	// for a user

@@ -215,8 +215,8 @@ func createTables(db *gorm.DB) error {
 // CreateCDB uses the CockroachDB root user to create a database,
 // politeiawww user if it does not already exist. User permissions are then
 // set for the database and the database tables are created if they do not
-// already exist. The encryption key is also created in case it does not exist.
-func CreateCDB(host, net, rootCert, certDir, keyDir string) error {
+// already exist.
+func CreateCDB(host, net, rootCert, certDir string) error {
 	log.Tracef("Create: %v %v %v %v", host, net, rootCert, certDir)
 
 	// Connect to CockroachDB as root user. CockroachDB connects
@@ -275,12 +275,6 @@ func CreateCDB(host, net, rootCert, certDir, keyDir string) error {
 		return err
 	}
 
-	// See if we need to create a new encryption key
-	err = database.ResolveEncryptionKey(keyDir)
-	if err != nil {
-		return err
-	}
-
 	// Setup database tables
 	tx := pdb.Begin()
 	err = createTables(tx)
@@ -328,8 +322,8 @@ func (c *cockroachdb) Open() error {
 
 // NewCDB returns a new cockroachdb context that contains a connection to the
 // specified database that was made using the passed in user and certificates.
-func NewCDB(user, host, net, rootCert, certDir, keyDir string) (*cockroachdb, error) {
-	log.Tracef("New: %v %v %v %v %v", user, host, net, rootCert, certDir)
+func NewCDB(user, host, net, rootCert, certDir, dbKey string) (*cockroachdb, error) {
+	log.Tracef("New: %v %v %v %v %v %v", user, host, net, rootCert, certDir, dbKey)
 
 	// Connect to database
 	h := "postgresql://" + user + "@" + host + "/" + dbPrefix + net
@@ -344,7 +338,7 @@ func NewCDB(user, host, net, rootCert, certDir, keyDir string) (*cockroachdb, er
 	addr := u.String() + "?" + qs
 
 	// load encryption key
-	ek, err := database.LoadEncryptionKey(filepath.Join(keyDir, database.DefaultEncryptionKeyFilename))
+	ek, err := database.LoadEncryptionKey(dbKey)
 	if err != nil {
 		fmt.Printf("error %v", err)
 		return nil, database.ErrLoadingEncryptionKey
