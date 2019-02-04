@@ -337,7 +337,7 @@ func initSMTP(cfg *config) error {
 	return nil
 }
 
-// loadDbKey tries to load the database encription key.  If it cannot find a
+// loadDbKey tries to load the database encription key. If it cannot find a
 // key it will prompt instructions on how to generate a new one.
 func loadDBKey(cfg *config) error {
 	if cfg.CreateDBKey {
@@ -346,13 +346,11 @@ func loadDBKey(cfg *config) error {
 		return nil
 	}
 
-	// Setup the key path. If the path is not specified by the caller
-	// try to load from <home_directory>/<default_key_name>.
+	// Setup the key path.
 	if cfg.DBKeyFilename == "" {
-		cfg.DBKeyFilename = filepath.Join(cfg.HomeDir, defaultDBKeyFilename)
-	} else {
-		cfg.DBKeyFilename = cleanAndExpandPath(cfg.DBKeyFilename)
+		return fmt.Errorf("dbkeyfilename cannot be blank")
 	}
+	cfg.DBKeyFilename = cleanAndExpandPath(cfg.DBKeyFilename)
 
 	// Check if the key file exists.
 	if !util.FileExists(cfg.DBKeyFilename) {
