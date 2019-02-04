@@ -285,7 +285,7 @@ func (b *backend) login(l *www.Login) loginReplyWithError {
 	// Get user from db.
 	user, err := b.UserGetByEmail(l.Email)
 	if err != nil {
-		if err == database.ErrNotFound {
+		if IsUserNotFoundError(err) {
 			log.Debugf("Login failure for %v: user not found in database",
 				l.Email)
 			return loginReplyWithError{
@@ -1010,12 +1010,12 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 	// Check if the user already exists.
 	var uid *uuid.UUID
 	if existingUser != nil {
-		fmt.Printf("cant get here")
 		existingPublicKey := hex.EncodeToString(existingUser.Identities[0].Key[:])
 		b.removeUserPubkeyAssociaton(existingUser, existingPublicKey)
 
 		// Update the user in the db.
 		newUser.ID = existingUser.ID
+		uid = &existingUser.ID
 		err = b.UserUpdate(newUser)
 	} else {
 		// Save the new user in the db.
@@ -1024,12 +1024,6 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 
 	// Error handling for the db write.
 	if err != nil {
-		if err == database.ErrInvalidEmail {
-			return nil, www.UserError{
-				ErrorCode: www.ErrorStatusMalformedEmail,
-			}
-		}
-
 		return nil, err
 	}
 
@@ -1068,7 +1062,7 @@ func (b *backend) ProcessVerifyNewUser(u www.VerifyNewUser) (*database.User, err
 	// Check that the user already exists.
 	user, err := b.UserGetByEmail(u.Email)
 	if err != nil {
-		if err == database.ErrNotFound {
+		if IsUserNotFoundError(err) {
 			log.Debugf("VerifyNewUser failure for %v: user not found",
 				u.Email)
 			return nil, www.UserError{
@@ -1162,7 +1156,7 @@ func (b *backend) ProcessResendVerification(rv *www.ResendVerification) (*www.Re
 	// Get user from db.
 	user, err := b.UserGetByEmail(rv.Email)
 	if err != nil {
-		if err == database.ErrNotFound {
+		if IsUserNotFoundError(err) {
 			log.Debugf("ResendVerification failure for %v: user not found",
 				rv.Email)
 			return &rvr, nil
@@ -1502,11 +1496,7 @@ func (b *backend) ProcessResetPassword(rp www.ResetPassword) (*www.ResetPassword
 	// Get user from db.
 	user, err := b.UserGetByEmail(rp.Email)
 	if err != nil {
-		if err == database.ErrInvalidEmail {
-			return nil, www.UserError{
-				ErrorCode: www.ErrorStatusMalformedEmail,
-			}
-		} else if err == database.ErrNotFound {
+		if IsUserNotFoundError(err) {
 			log.Debugf("ResetPassword failure for %v: user not found", rp.Email)
 			return &reply, nil
 		}

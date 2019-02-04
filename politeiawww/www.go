@@ -1009,7 +1009,7 @@ func (p *politeiawww) handleProposalDetails(w http.ResponseWriter, r *http.Reque
 
 	user, err := p.getSessionUser(w, r)
 	if err != nil {
-		if err != database.ErrNotFound {
+		if !IsUserNotFoundError(err) {
 			RespondWithError(w, r, 0,
 				"handleProposalDetails: getSessionUser %v", err)
 			return
@@ -1186,7 +1186,7 @@ func (p *politeiawww) handleCommentsGet(w http.ResponseWriter, r *http.Request) 
 
 	user, err := p.getSessionUser(w, r)
 	if err != nil {
-		if err != database.ErrNotFound {
+		if !IsUserNotFoundError(err) {
 			RespondWithError(w, r, 0,
 				"handleCommentsGet: getSessionUser %v", err)
 			return

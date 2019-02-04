@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/badoux/checkmail"
 	www "github.com/decred/politeia/politeiawww/api/v1"
@@ -53,7 +54,7 @@ func convertWWWIdentityFromDatabaseIdentity(identity database.Identity) www.User
 	}
 }
 
-func isUserNotFoundError(err error) bool {
+func IsUserNotFoundError(err error) bool {
 	v, ok := err.(www.UserError)
 	return ok && v.ErrorCode == www.ErrorStatusUserNotFound
 }
@@ -70,7 +71,7 @@ func (b *backend) UserNew(u database.User) (*uuid.UUID, error) {
 
 	// Make sure the user does not already exist.
 	_, err := b.UserGetByEmail(u.Email)
-	if err != nil && !isUserNotFoundError(err) {
+	if err != nil && !IsUserNotFoundError(err) {
 		return nil, err
 	}
 
@@ -128,10 +129,11 @@ func (b *backend) UserNew(u database.User) (*uuid.UUID, error) {
 // UserGet returns a user record if found in the database.
 func (b *backend) UserGetByEmail(email string) (*database.User, error) {
 	log.Tracef("UserGet: %v", email)
+
 	var user *database.User
 
 	err := b.AllUsers(func(u *database.User) {
-		if u.Email == email {
+		if u.Email == strings.ToLower(email) {
 			user = u
 		}
 	})
@@ -239,13 +241,13 @@ func (b *backend) UserGetByIDStr(userIDStr string) (*database.User, error) {
 	}
 
 	user, err := b.UserGetByID(userID)
-	if err != nil {
-		return nil, err
-	}
-	if user == nil {
+	if err == database.ErrNotFound {
 		return nil, www.UserError{
 			ErrorCode: www.ErrorStatusUserNotFound,
 		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return user, nil

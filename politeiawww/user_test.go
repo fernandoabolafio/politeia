@@ -56,7 +56,7 @@ func TestProcessUserDetails(t *testing.T) {
 	var ud v1.UserDetails
 	ud.UserID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	_, err = b.ProcessUserDetails(&ud, false, false)
-	if err.(v1.UserError).ErrorCode != v1.ErrorStatusUserNotFound {
+	if !IsUserNotFoundError(err) {
 		t.Errorf("ProcessUserDetails error got %v, want %v",
 			err, v1.ErrorStatusUserNotFound)
 	}
