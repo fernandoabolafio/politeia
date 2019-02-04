@@ -41,7 +41,9 @@ type cockroachdb struct {
 	dbAddress     string                  // Database address
 }
 
-func buildDbQueryString(rootCert, certDir string, u *url.URL) string {
+// buildDBQueryStirng assembles the certification query string contained
+// in the database connection URL.
+func buildDBQueryString(rootCert, certDir string, u *url.URL) string {
 	v := url.Values{}
 	v.Set("ssl", "true")
 	v.Set("sslmode", "require")
@@ -52,7 +54,21 @@ func buildDbQueryString(rootCert, certDir string, u *url.URL) string {
 	return v.Encode()
 }
 
-// Put stores a payload by a given key
+// createTables sets up the tables for cockroach db.
+func createTables(db *gorm.DB) error {
+	log.Tracef("createTables")
+
+	if !db.HasTable(tableKeyValue) {
+		err := db.CreateTable(&KeyValue{}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Put stores a payload by a given key.
 func (c *cockroachdb) Put(key string, payload []byte) error {
 	log.Tracef("Put: %v", key)
 
@@ -64,20 +80,20 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 		return database.ErrShutdown
 	}
 
-	// Run put within a transaction
+	// Run put within a transaction.
 	tx := c.usersdb.Begin()
 
-	// Encrypt payload
+	// Encrypt payload.
 	packed, err := database.Encrypt(database.DatabaseVersion, c.encryptionKey.Key, payload)
 	if err != nil {
 		return err
 	}
 
-	// Try to find the record with the provided key
+	// Try to find the record with the provided key.
 	var keyValue KeyValue
 	err = tx.Where("key = ?", key).First(&keyValue).Error
 	if gorm.IsRecordNotFoundError(err) {
-		// record not found, so we creaet a new one
+		// If the record is not found, create one
 		err = tx.Create(&KeyValue{
 			Key:     key,
 			Payload: packed,
@@ -87,11 +103,10 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 			return err
 		}
 	} else if err != nil {
-		// return any other error
 		tx.Rollback()
 		return err
 	} else {
-		// record found, update existent value
+		// Record found, update existent value.
 		err = tx.Model(&keyValue).Update(&KeyValue{
 			Payload: packed,
 		}).Error
@@ -104,7 +119,7 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 	return tx.Commit().Error
 }
 
-// Get returns a payload by a given key
+// Get returns a payload by a given key.
 func (c *cockroachdb) Get(key string) ([]byte, error) {
 	log.Tracef("Get: %v", key)
 
@@ -116,7 +131,7 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 		return nil, database.ErrShutdown
 	}
 
-	// Find user by id
+	// Try to find the record in the database.
 	var keyValue KeyValue
 	err := c.usersdb.Where("key = ?", key).First(&keyValue).Error
 	if gorm.IsRecordNotFoundError(err) {
@@ -126,6 +141,7 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
+	// Decrypt record.
 	payload, _, err := database.Decrypt(c.encryptionKey.Key, keyValue.Payload)
 	if err != nil {
 		return nil, err
@@ -134,6 +150,8 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 	return payload, nil
 }
 
+// GetAll iterates over the entire database, applying the provided callback
+// function for each record.
 func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 	log.Tracef("GetAll")
 
@@ -151,7 +169,7 @@ func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 		return err
 	}
 	for _, v := range values {
-		// decrypt payload
+		// Decrypt the record payload.
 		decValue, _, err := database.Decrypt(c.encryptionKey.Key, v.Payload)
 		if err != nil {
 			return err
@@ -162,7 +180,7 @@ func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 	return nil
 }
 
-// Has returns true if the database does contains the given key.
+// Has returns true if the database does contain the given key.
 func (c *cockroachdb) Has(key string) (bool, error) {
 	log.Tracef("Has: %v", key)
 
@@ -174,6 +192,7 @@ func (c *cockroachdb) Has(key string) (bool, error) {
 		return false, database.ErrShutdown
 	}
 
+	// Try to find the record in the database.
 	var keyValue KeyValue
 	err := c.usersdb.Where("key = ?", key).First(&keyValue).Error
 	if gorm.IsRecordNotFoundError(err) {
@@ -187,6 +206,60 @@ func (c *cockroachdb) Has(key string) (bool, error) {
 
 }
 
+// Open opens a new database connection and make sure there is a version record
+// stored in the database. If the version record already exists, it will try to
+// decrypt it to verify that the encryption key is valid; otherwise a new version
+// record will be created in the database.
+func (c *cockroachdb) Open() error {
+	log.Tracef("Open cockroachdb")
+
+	// Open a new database connection.
+	db, err := gorm.Open("postgres", c.dbAddress)
+	if err != nil {
+		log.Debugf("Open: could not connect to %v", c.dbAddress)
+		return err
+	}
+
+	c.usersdb = db
+
+	// See if we need to write a version record.
+	payload, err := c.Get(database.DatabaseVersionKey)
+
+	if err == database.ErrNotFound {
+		// Write version record.
+		payload, err = database.EncodeVersion(database.Version{
+			Version: database.DatabaseVersion,
+			Time:    time.Now().Unix(),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Encrypt and save record.
+		packed, err := database.Encrypt(database.DatabaseVersion,
+			c.encryptionKey.Key, payload)
+		if err != nil {
+			return err
+		}
+
+		return c.Put(database.DatabaseVersionKey, packed)
+	} else {
+		// Version record already exists, so we check if the encryption key
+		// is valid.
+		_, version, err := database.Decrypt(c.encryptionKey.Key, payload)
+		if err != nil {
+			return database.ErrWrongEncryptionKey
+		}
+		// Also check if the record version matches the interface implementation
+		// version.
+		if version != database.DatabaseVersion {
+			return database.ErrWrongVersion
+		}
+	}
+
+	return err
+}
+
 // Close shuts down the database.  All interface functions MUST return with
 // errShutdown if the backend is shutting down.
 func (c *cockroachdb) Close() error {
@@ -197,19 +270,6 @@ func (c *cockroachdb) Close() error {
 
 	c.shutdown = true
 	return c.usersdb.Close()
-}
-
-func createTables(db *gorm.DB) error {
-	log.Tracef("createTables")
-
-	if !db.HasTable(tableKeyValue) {
-		err := db.CreateTable(&KeyValue{}).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // CreateCDB uses the CockroachDB root user to create a database,
@@ -228,7 +288,7 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 		return err
 	}
 
-	qs := buildDbQueryString(rootCert, certDir, u)
+	qs := buildDBQueryString(rootCert, certDir, u)
 
 	addr := u.String() + "?" + qs
 
@@ -241,7 +301,7 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 		return err
 	}
 
-	// Setup politeiawww database and users
+	// Setup politeiawww database and users.
 	dbName := dbPrefix + net
 	q := "CREATE DATABASE IF NOT EXISTS " + dbName
 	err = db.Exec(q).Error
@@ -260,7 +320,7 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 		return err
 	}
 
-	// Connect to records database with root user
+	// Connect to records database with root user.
 	h = "postgresql://root@" + host + "/" + dbName
 	u, err = url.Parse(h)
 	if err != nil {
@@ -275,7 +335,7 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 		return err
 	}
 
-	// Setup database tables
+	// Setup database tables.
 	tx := pdb.Begin()
 	err = createTables(tx)
 	if err != nil {
@@ -285,66 +345,12 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 	return tx.Commit().Error
 }
 
-// Open opens a new database connection and make sure there is a version record
-// stored in the database. If the version record already exists, it will try to
-// decrypt it to verify that the encryption key is valid; otherwise a new version
-// record will be created in the database.
-func (c *cockroachdb) Open() error {
-	log.Tracef("Open cockroachdb")
-
-	// Open a new database connection
-	db, err := gorm.Open("postgres", c.dbAddress)
-	if err != nil {
-		log.Debugf("Open: could not connect to %v", c.dbAddress)
-		return err
-	}
-
-	c.usersdb = db
-
-	// See if we need to write a version record
-	payload, err := c.Get(database.DatabaseVersionKey)
-
-	if err == database.ErrNotFound {
-		// Write version record
-		payload, err = database.EncodeVersion(database.Version{
-			Version: database.DatabaseVersion,
-			Time:    time.Now().Unix(),
-		})
-		if err != nil {
-			return err
-		}
-
-		packed, err := database.Encrypt(database.DatabaseVersion,
-			c.encryptionKey.Key, payload)
-		if err != nil {
-			return err
-		}
-
-		return c.Put(database.DatabaseVersionKey, packed)
-	} else {
-		// Version record already exists, so we check if the encryption key
-		// is valid
-		_, version, err := database.Decrypt(c.encryptionKey.Key, payload)
-		if err != nil {
-			fmt.Printf("what now %v", c.encryptionKey)
-			return database.ErrWrongEncryptionKey
-		}
-		// Also check if the record version matches the interface implementation
-		// version
-		if version != database.DatabaseVersion {
-			return database.ErrWrongVersion
-		}
-	}
-
-	return err
-}
-
-// NewCDB returns a new cockroachdb context that contains a connection to the
+// NewCDB returns a new cockroachdb context which contains a connection to the
 // specified database that was made using the passed in user and certificates.
 func NewCDB(user, host, net, rootCert, certDir string, dbKey *database.EncryptionKey) (*cockroachdb, error) {
 	log.Tracef("New CockroachDB: %v %v %v %v %v %v", user, host, net, rootCert, certDir)
 
-	// Connect to database
+	// Connect to the database.
 	h := "postgresql://" + user + "@" + host + "/" + dbPrefix + net
 	u, err := url.Parse(h)
 	if err != nil {
@@ -352,10 +358,11 @@ func NewCDB(user, host, net, rootCert, certDir string, dbKey *database.Encryptio
 		return nil, err
 	}
 
-	qs := buildDbQueryString(rootCert, certDir, u)
+	qs := buildDBQueryString(rootCert, certDir, u)
 
 	addr := u.String() + "?" + qs
 
+	// Setup db context.
 	c := &cockroachdb{
 		dbAddress:     addr,
 		encryptionKey: dbKey,

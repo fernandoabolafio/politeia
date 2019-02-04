@@ -31,7 +31,7 @@ type leveldb struct {
 	encryptionKey *database.EncryptionKey // Encryption key
 }
 
-// Put stores a payload by a given key
+// Put stores a payload by a given key.
 func (l *leveldb) Put(key string, payload []byte) error {
 	log.Tracef("Put %v:", key)
 
@@ -43,7 +43,7 @@ func (l *leveldb) Put(key string, payload []byte) error {
 		return database.ErrShutdown
 	}
 
-	// encrypt payload
+	// Encrypt payload.
 	packed, err := database.Encrypt(database.DatabaseVersion, l.encryptionKey.Key, payload)
 	if err != nil {
 		return err
@@ -52,7 +52,7 @@ func (l *leveldb) Put(key string, payload []byte) error {
 	return l.userdb.Put([]byte(key), packed, nil)
 }
 
-// Get returns a payload by a given key
+// Get returns a payload by a given key.
 func (l *leveldb) Get(key string) ([]byte, error) {
 	log.Tracef("Get: %v", key)
 
@@ -64,6 +64,7 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 		return nil, database.ErrShutdown
 	}
 
+	// Try to find the record in the database.
 	packed, err := l.userdb.Get([]byte(key), nil)
 	if err == ldb.ErrNotFound {
 		return nil, database.ErrNotFound
@@ -72,6 +73,7 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
+	// Decrypt record.
 	payload, _, err := database.Decrypt(l.encryptionKey.Key, packed)
 	if err != nil {
 		return nil, err
@@ -80,6 +82,8 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 	return payload, nil
 }
 
+// GetAll iterates over the entire database, applying the provided callback
+// function for each record.
 func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 	l.RLock()
 	shutdown := l.shutdown
@@ -94,7 +98,7 @@ func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 		key := iter.Key()
 		value := iter.Value()
 
-		// decrypt value
+		// Decrypt the record payload.
 		decValue, _, err := database.Decrypt(l.encryptionKey.Key, value)
 		if err != nil {
 			return err
@@ -107,7 +111,7 @@ func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 	return iter.Error()
 }
 
-// Has returns true if the database does contains the given key.
+// Has returns true if the database does contain the given key.
 func (l *leveldb) Has(key string) (bool, error) {
 	l.RLock()
 	shutdown := l.shutdown
@@ -117,15 +121,18 @@ func (l *leveldb) Has(key string) (bool, error) {
 		return false, database.ErrShutdown
 	}
 
+	// Try to find the record in the database.
 	return l.userdb.Has([]byte(key), nil)
 }
 
 // Open opens a new database connection and make sure there is a version record
-// stored in the database
+// stored in the database. If the version record already exists, it will try to
+// decrypt it to verify that the encryption key is valid; otherwise a new version
+// record will be created in the database.
 func (l *leveldb) Open() error {
 	log.Tracef("Open leveldb")
 
-	// open database
+	// Open the database.
 	var err error
 	l.userdb, err = ldb.OpenFile(filepath.Join(l.root, UserdbPath), &opt.Options{
 		ErrorIfMissing: true,
@@ -134,11 +141,11 @@ func (l *leveldb) Open() error {
 		return err
 	}
 
-	// See if we need to write a version record
+	// See if we need to write a version record.
 	payload, err := l.Get(database.DatabaseVersionKey)
 
 	if err == database.ErrNotFound {
-		// Write version record
+		// Write version record.
 		payload, err = database.EncodeVersion(database.Version{
 			Version: database.DatabaseVersion,
 			Time:    time.Now().Unix(),
@@ -147,6 +154,7 @@ func (l *leveldb) Open() error {
 			return err
 		}
 
+		// Encrypt and save record.
 		packed, err := database.Encrypt(database.DatabaseVersion,
 			l.encryptionKey.Key, payload)
 		if err != nil {
@@ -156,13 +164,13 @@ func (l *leveldb) Open() error {
 		return l.Put(database.DatabaseVersionKey, packed)
 	} else {
 		// Version record already exists, so we check if the encryption key
-		// is valid
+		// is valid.
 		_, version, err := database.Decrypt(l.encryptionKey.Key, payload)
 		if err != nil {
 			return database.ErrWrongEncryptionKey
 		}
 		// Also check if the record version matches the interface implementation
-		// version
+		// version.
 		if version != database.DatabaseVersion {
 			return database.ErrWrongVersion
 		}
@@ -187,13 +195,14 @@ func (l *leveldb) Close() error {
 func CreateLevelDB(dataDir string) error {
 	log.Tracef("Create LevelDB: %v %v", dataDir)
 
-	// db openFile is called to make sure the db will be created in case it
-	// doesn not exist
+	// OpenFile is called to make sure the db will be created in case it
+	// does not already exist.
 	db, err := ldb.OpenFile(filepath.Join(dataDir, UserdbPath), nil)
 	if err != nil {
 		return err
 	}
 
+	// Close database.
 	err = db.Close()
 	if err != nil {
 		return err
@@ -207,6 +216,7 @@ func CreateLevelDB(dataDir string) error {
 func NewLevelDB(dataDir string, dbKey *database.EncryptionKey) (*leveldb, error) {
 	log.Tracef("New LevelDB: %v %v", dataDir, dbKey)
 
+	// Setup db context.
 	l := &leveldb{
 		root:          dataDir,
 		encryptionKey: dbKey,

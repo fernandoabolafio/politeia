@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// RecordTypeT indetifies a record struct type
+// RecordTypeT indetifies the struct type of a database record.
 type RecordTypeT int
 
 var (
 	// ErrNotFound indicates that a provided key was not found
-	// in the database
+	// in the database.
 	ErrNotFound = errors.New("key not found")
 
 	// ErrUserExists indicates that a user already exists in the database.
@@ -32,32 +32,28 @@ var (
 	// does not match version of the interface implementation.
 	ErrWrongVersion = errors.New("wrong database version")
 
-	// ErrLoadingEncryptionKey is emitted when the encryption key cannot be
-	// loaded from theprivded path
-	ErrLoadingEncryptionKey = errors.New("database encryption key could not be loaded")
-
 	// ErrWrongRecordVersion is emitted when the record version in the
 	// database does not match the version of the interface implementation.
 	ErrWrongRecordVersion = errors.New("wrong record version")
 
 	// ErrWrongRecordType is emitted when the record type in the database
-	// does not match the expected type
+	// does not match the expected type.
 	ErrWrongRecordType = errors.New("wrong record type")
 
 	// ErrWrongEncryptionKey is emitted when the database record cannot
-	// be decrypted with the provided key
+	// be decrypted with the provided key.
 	ErrWrongEncryptionKey = errors.New("Invalid database encryption key")
 )
 
 const (
-	// DatabaseVersion is the current version of the database
+	// DatabaseVersion is the current version of the database.
 	DatabaseVersion uint32 = 1
 
-	// DatabaseVersionKey is the key used to map the database version
+	// DatabaseVersionKey is the key used to map the database version.
 	DatabaseVersionKey = "userversion"
 
 	// LastPaywallAddressIndexKey is the key used to map the last paywall index
-	// for a user
+	// for a user.
 	LastPaywallAddressIndexKey = "lastpaywallindex"
 
 	RecordTypeInvalid            RecordTypeT = 0 // Invalid record type
@@ -67,7 +63,7 @@ const (
 )
 
 // EncryptionKey wraps a key used for encrypting/decrypting the database
-// data and the time when it was created
+// data and the time when it was created.
 type EncryptionKey struct {
 	Key  [32]byte // Key used for encryption
 	Time int64    // Time key was created
@@ -192,6 +188,6 @@ type Database interface {
 	Has(string) (bool, error)                     // Returns true if the database has a key
 	GetAll(callbackFn func(string, []byte)) error // Iterate all database values
 
-	Open() error
-	Close() error
+	Open() error  // Open a new database connection
+	Close() error // Close the database connection
 }

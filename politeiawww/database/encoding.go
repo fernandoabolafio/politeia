@@ -8,13 +8,16 @@ import (
 	"encoding/json"
 )
 
-func verifyRecordVersion(recordVersion, dbVersion uint32) error {
-	if recordVersion != dbVersion {
+// verifyRecordVersion checks the provided record version against the current
+// database implementation version.
+func verifyRecordVersion(recordVersion uint32) error {
+	if recordVersion != DatabaseVersion {
 		return ErrWrongRecordVersion
 	}
 	return nil
 }
 
+// verifyRecordType verifies the provided record type against the expected type
 func verifyRecordType(recordType, expectedType RecordTypeT) error {
 	if recordType != expectedType {
 		return ErrWrongRecordType
@@ -46,7 +49,7 @@ func DecodeVersion(payload []byte) (*Version, error) {
 		return nil, err
 	}
 
-	err = verifyRecordVersion(version.RecordVersion, DatabaseVersion)
+	err = verifyRecordVersion(version.RecordVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +93,7 @@ func EncodeLastPaywallAddressIndex(lp LastPaywallAddressIndex) ([]byte, error) {
 }
 
 // DecodeLastPaywallAddressIndex decodes a JSON byte slice into a
-// LastPaywallAddressIndex. It also adds the record type and version
-// before encoding.
+// LastPaywallAddressIndex.
 func DecodeLastPaywallAddressIndex(payload []byte) (*LastPaywallAddressIndex, error) {
 	var lp LastPaywallAddressIndex
 
@@ -100,7 +102,7 @@ func DecodeLastPaywallAddressIndex(payload []byte) (*LastPaywallAddressIndex, er
 		return nil, err
 	}
 
-	err = verifyRecordVersion(lp.RecordVersion, DatabaseVersion)
+	err = verifyRecordVersion(lp.RecordVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +124,7 @@ func DecodeUser(payload []byte) (*User, error) {
 		return nil, err
 	}
 
-	err = verifyRecordVersion(u.RecordVersion, DatabaseVersion)
+	err = verifyRecordVersion(u.RecordVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +147,7 @@ func EncodeEncryptionKey(ek EncryptionKey) ([]byte, error) {
 	return k, nil
 }
 
-// DecodeEncryptionKey decodes a JSON byte slice into EncryptionKey
+// DecodeEncryptionKey decodes a JSON byte slice into EncryptionKey.
 func DecodeEncryptionKey(payload []byte) (*EncryptionKey, error) {
 	var ek EncryptionKey
 

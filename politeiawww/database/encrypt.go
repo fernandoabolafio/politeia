@@ -12,17 +12,17 @@ import (
 )
 
 // Encrypt encrypts a byte slice with the provided version using
-// the provided key
+// the provided key.
 func Encrypt(version uint32, key [32]byte, data []byte) ([]byte, error) {
 	return sbox.Encrypt(version, &key, data)
 }
 
-// Decrypt decrypts a byte slice using the provided key
+// Decrypt decrypts a byte slice using the provided key.
 func Decrypt(key [32]byte, data []byte) ([]byte, uint32, error) {
 	return sbox.Decrypt(&key, data)
 }
 
-// SaveEncryptionKey saves a EncryptionKey into the provided filename
+// SaveEncryptionKey saves a EncryptionKey into the provided filename.
 func SaveEncryptionKey(ek EncryptionKey, filename string) error {
 	k, err := EncodeEncryptionKey(ek)
 	if err != nil {
@@ -32,7 +32,7 @@ func SaveEncryptionKey(ek EncryptionKey, filename string) error {
 	return ioutil.WriteFile(filename, k, 0600)
 }
 
-// LoadEncryptionKey loads a EncryptionKey from the provided filename
+// LoadEncryptionKey loads a EncryptionKey from the provided filename.
 func LoadEncryptionKey(filename string) (*EncryptionKey, error) {
 	k, err := ioutil.ReadFile(filename)
 	if err != nil {
