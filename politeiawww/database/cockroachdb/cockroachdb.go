@@ -217,7 +217,7 @@ func createTables(db *gorm.DB) error {
 // set for the database and the database tables are created if they do not
 // already exist.
 func CreateCDB(host, net, rootCert, certDir string) error {
-	log.Tracef("Create: %v %v %v %v", host, net, rootCert, certDir)
+	log.Tracef("Create cockroachDB: %v %v %v %v", host, net, rootCert, certDir)
 
 	// Connect to CockroachDB as root user. CockroachDB connects
 	// to defaultdb when a database is not specified.
@@ -286,9 +286,13 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 }
 
 // Open opens a new database connection and make sure there is a version record
-// stored in the database
+// stored in the database. If the version record already exists, it will try to
+// decrypt it to verify that the encryption key is valid; otherwise a new version
+// record will be created in the database.
 func (c *cockroachdb) Open() error {
-	//open a new database connection
+	log.Tracef("Open cockroachdb")
+
+	// Open a new database connection
 	db, err := gorm.Open("postgres", c.dbAddress)
 	if err != nil {
 		log.Debugf("Open: could not connect to %v", c.dbAddress)
@@ -297,11 +301,11 @@ func (c *cockroachdb) Open() error {
 
 	c.usersdb = db
 
-	// see if we need to write a version record
+	// See if we need to write a version record
 	payload, err := c.Get(database.DatabaseVersionKey)
 
 	if err == database.ErrNotFound {
-		// write version record
+		// Write version record
 		payload, err = database.EncodeVersion(database.Version{
 			Version: database.DatabaseVersion,
 			Time:    time.Now().Unix(),
@@ -309,21 +313,36 @@ func (c *cockroachdb) Open() error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("got here")
-		return c.Put(database.DatabaseVersionKey, payload)
+
+		packed, err := database.Encrypt(database.DatabaseVersion,
+			c.encryptionKey.Key, payload)
+		if err != nil {
+			return err
+		}
+
+		return c.Put(database.DatabaseVersionKey, packed)
+	} else {
+		// Version record already exists, so we check if the encryption key
+		// is valid
+		_, version, err := database.Decrypt(c.encryptionKey.Key, payload)
+		if err != nil {
+			fmt.Printf("what now %v", c.encryptionKey)
+			return database.ErrWrongEncryptionKey
+		}
+		// Also check if the record version matches the interface implementation
+		// version
+		if version != database.DatabaseVersion {
+			return database.ErrWrongVersion
+		}
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // NewCDB returns a new cockroachdb context that contains a connection to the
 // specified database that was made using the passed in user and certificates.
-func NewCDB(user, host, net, rootCert, certDir, dbKey string) (*cockroachdb, error) {
-	log.Tracef("New: %v %v %v %v %v %v", user, host, net, rootCert, certDir, dbKey)
+func NewCDB(user, host, net, rootCert, certDir string, dbKey *database.EncryptionKey) (*cockroachdb, error) {
+	log.Tracef("New CockroachDB: %v %v %v %v %v %v", user, host, net, rootCert, certDir)
 
 	// Connect to database
 	h := "postgresql://" + user + "@" + host + "/" + dbPrefix + net
@@ -337,16 +356,9 @@ func NewCDB(user, host, net, rootCert, certDir, dbKey string) (*cockroachdb, err
 
 	addr := u.String() + "?" + qs
 
-	// load encryption key
-	ek, err := database.LoadEncryptionKey(dbKey)
-	if err != nil {
-		fmt.Printf("error %v", err)
-		return nil, database.ErrLoadingEncryptionKey
-	}
-
 	c := &cockroachdb{
 		dbAddress:     addr,
-		encryptionKey: ek,
+		encryptionKey: dbKey,
 	}
 
 	// Open the database

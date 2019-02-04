@@ -211,6 +211,19 @@ func (p *politeiawww) getIdentity() error {
 	return nil
 }
 
+// createDBKey creates a new DB key in <home_directory>/<default_key_name>
+func (p *politeiawww) createDBKey() error {
+	path := filepath.Join(p.cfg.HomeDir, defaultDBKeyFilename)
+
+	err := database.NewEncryptionKey(path)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Database key saved to: %v", path)
+	return nil
+}
+
 // RespondWithError returns an HTTP error status to the client. If it's a user
 // error, it returns a 4xx HTTP status and the specific user error code. If it's
 // an internal server error, it returns 500 and an error code which is also
@@ -1756,6 +1769,10 @@ func _main() error {
 	// Check if this command is being run to fetch the identity.
 	if p.cfg.FetchIdentity {
 		return p.getIdentity()
+	}
+
+	if p.cfg.CreateDBKey {
+		return p.createDBKey()
 	}
 
 	p.backend, err = NewBackend(p.cfg)

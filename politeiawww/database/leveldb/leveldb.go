@@ -123,6 +123,8 @@ func (l *leveldb) Has(key string) (bool, error) {
 // Open opens a new database connection and make sure there is a version record
 // stored in the database
 func (l *leveldb) Open() error {
+	log.Tracef("Open leveldb")
+
 	// open database
 	var err error
 	l.userdb, err = ldb.OpenFile(filepath.Join(l.root, UserdbPath), &opt.Options{
@@ -133,21 +135,40 @@ func (l *leveldb) Open() error {
 	}
 
 	// See if we need to write a version record
-	exists, err := l.userdb.Has([]byte(database.DatabaseVersionKey), nil)
-	if err != nil || exists {
-		return err
+	payload, err := l.Get(database.DatabaseVersionKey)
+
+	if err == database.ErrNotFound {
+		// Write version record
+		payload, err = database.EncodeVersion(database.Version{
+			Version: database.DatabaseVersion,
+			Time:    time.Now().Unix(),
+		})
+		if err != nil {
+			return err
+		}
+
+		packed, err := database.Encrypt(database.DatabaseVersion,
+			l.encryptionKey.Key, payload)
+		if err != nil {
+			return err
+		}
+
+		return l.Put(database.DatabaseVersionKey, packed)
+	} else {
+		// Version record already exists, so we check if the encryption key
+		// is valid
+		_, version, err := database.Decrypt(l.encryptionKey.Key, payload)
+		if err != nil {
+			return database.ErrWrongEncryptionKey
+		}
+		// Also check if the record version matches the interface implementation
+		// version
+		if version != database.DatabaseVersion {
+			return database.ErrWrongVersion
+		}
 	}
 
-	// Write version record
-	v, err := database.EncodeVersion(database.Version{
-		Version: database.DatabaseVersion,
-		Time:    time.Now().Unix(),
-	})
-	if err != nil {
-		return err
-	}
-
-	return l.Put(database.DatabaseVersionKey, v)
+	return err
 }
 
 // Close shuts down the database.  All interface functions MUST return with
@@ -164,7 +185,7 @@ func (l *leveldb) Close() error {
 
 // CreateLevelDB creates a new leveldb database if does not already exist.
 func CreateLevelDB(dataDir string) error {
-	log.Tracef("leveldb Create: %v %v", dataDir)
+	log.Tracef("Create LevelDB: %v %v", dataDir)
 
 	// db openFile is called to make sure the db will be created in case it
 	// doesn not exist
@@ -183,21 +204,15 @@ func CreateLevelDB(dataDir string) error {
 
 // NewLevelDB creates a new leveldb instance. It must be called after the Create
 // method, otherwise it will throw an error.
-func NewLevelDB(dataDir, dbKey string) (*leveldb, error) {
-	log.Tracef("leveldb New: %v %v", dataDir, dbKey)
-
-	// load encryption key
-	ek, err := database.LoadEncryptionKey(dbKey)
-	if err != nil {
-		return nil, database.ErrLoadingEncryptionKey
-	}
+func NewLevelDB(dataDir string, dbKey *database.EncryptionKey) (*leveldb, error) {
+	log.Tracef("New LevelDB: %v %v", dataDir, dbKey)
 
 	l := &leveldb{
 		root:          dataDir,
-		encryptionKey: ek,
+		encryptionKey: dbKey,
 	}
 
-	err = l.Open()
+	err := l.Open()
 	if err != nil {
 		return nil, err
 	}

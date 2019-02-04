@@ -56,21 +56,25 @@ func createBackend(t *testing.T) *backend {
 	}
 
 	// Create a database key
-	err = database.NewEncryptionKey(dir)
+	keyFilename := filepath.Join(dir, defaultDBKeyFilename)
+	err = database.NewEncryptionKey(keyFilename)
 	if err != nil {
-		t.Fatalf("setup database key: %v", err)
+		t.Fatalf("new encription key: %v", err)
 	}
-	key := filepath.Join(dir, database.DefaultEncryptionKeyFilename)
+	key, err := database.LoadEncryptionKey(keyFilename)
+	if err != nil {
+		t.Fatalf("load encryption key: %v", err)
+	}
 
 	// Setup database
 	err = leveldb.CreateLevelDB(cfg.DataDir)
 	if err != nil {
-		t.Fatalf("setup database: %v", err)
+		t.Fatalf("lreate level db: %v", err)
 	}
 
 	db, err := leveldb.NewLevelDB(cfg.DataDir, key)
 	if err != nil {
-		t.Fatalf("setup database: %v", err)
+		t.Fatalf("new leveldb %v", err)
 	}
 
 	return &backend{

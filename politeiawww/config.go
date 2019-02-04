@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -38,6 +37,7 @@ const (
 	defaultLogFilename      = "politeiawww.log"
 	adminLogFilename        = "admin.log"
 	defaultIdentityFilename = "identity.json"
+	defaultDBKeyFilename    = "dbkey.json"
 
 	defaultMainnetPort = "4443"
 	defaultTestnetPort = "4443"
@@ -137,10 +137,12 @@ type config struct {
 	CacheCertDir             string `long:"cachecertdir" description:"Directory containing SSL client certificates"`
 	CacheRootCert            string `long:"cacherootcert" description:"File containing SSL root certificate"`
 	Database                 string `long:"database" description:"The database to be used: leveldb or cockroachdb (default is leveldb)"`
+	DBKey                    *database.EncryptionKey
 	DBHost                   string `long:"dbhost" description:"Database ip:port"`
 	DBCertDir                string `long:"dbcertdir" description:"Directory containing SSL client certificates"`
 	DBRootCert               string `long:"dbrootcert" description:"File containing SSL root certificate"`
-	DBKey                    string `long:"dbkey" description:"File containing the secret sey for database encryption"`
+	DBKeyFilename            string `long:"dbkeyfilename" description:"File containing the secret sey for database encryption"`
+	CreateDBKey              bool   `long:"createdbkey" description:"Create a new database key in the provided path"`
 	FetchIdentity            bool   `long:"fetchidentity" description:"Whether or not politeiawww fetches the identity from politeiad."`
 	WebServerAddress         string `long:"webserveraddress" description:"Address for the Politeia web server; it should have this format: <scheme>://<host>[:<port>]"`
 	Interactive              string `long:"interactive" description:"Set to i-know-this-is-a-bad-idea to turn off interactive mode during --fetchidentity."`
@@ -194,66 +196,12 @@ func validLogLevel(logLevel string) bool {
 // validDBOption returns wheter or not dbOption is a valid database option.
 func validDBOption(dbOption string) bool {
 	switch dbOption {
-	case "cockroachdb":
+	case levelDBOption:
 		return true
-	case "leveldb":
+	case cockroachDBOption:
 		return true
 	}
 	return false
-}
-
-// evaluateUserChoice evaluates and validates a user input
-// for a "yes or no" question
-func evaluateUserChoice(choice string) (bool, error) {
-	c := strings.TrimSuffix(choice, "\n")
-	switch strings.ToLower(c) {
-	case "y", "yes":
-		return true, nil
-	case "n", "no":
-		return false, nil
-	}
-	return false, fmt.Errorf("Invalid option")
-}
-
-// setupDatabaseKey is used to setup a new database key when the key is not
-// provided in the config
-func setupDatabaseKey(cfg *config) error {
-	var createKey bool
-	var err error
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Printf("Database key not provided. " +
-		"Do you want to create a new key in the default directory? (yes/no) \n")
-
-	// Wait for a valid user input
-	for {
-		uInput, _ := reader.ReadString('\n')
-		createKey, err = evaluateUserChoice(uInput)
-		if err != nil {
-			// Invalid input, print and keep waiting
-			// for a valid input
-			fmt.Println(err)
-		} else {
-			break
-		}
-	}
-
-	// Check if the choice is favorable to a create a new db key
-	if !createKey {
-		return fmt.Errorf("You need to specify a database key path")
-	}
-
-	// Create a new db key
-	err = database.NewEncryptionKey(cfg.HomeDir)
-	if err != nil {
-		return err
-	}
-	cfg.DBKey = filepath.Join(cfg.HomeDir, database.DefaultEncryptionKeyFilename)
-	// Remember user to setup the db key configuration
-	fmt.Printf("\nDatabase key created at %v."+
-		" Remember to set the key in the 'dbkey' config option"+
-		" before running Politeiawww \n \n", cfg.DBKey)
-	return nil
 }
 
 // supportedSubsystems returns a sorted slice of the supported subsystems for
@@ -386,6 +334,40 @@ func initSMTP(cfg *config) error {
 		}
 	}
 
+	return nil
+}
+
+// loadDbKey tries to load the database encription key.  If it cannot find a
+// key it will prompt instructions on how to generate a new one.
+func loadDBKey(cfg *config) error {
+	if cfg.CreateDBKey {
+		// Don't try to load the db key from the existiting file if the
+		// caller is trying to create a new one.
+		return nil
+	}
+
+	// Setup the key path. If the path is not specified by the caller
+	// try to load from <home_directory>/<default_key_name>.
+	if cfg.DBKeyFilename == "" {
+		cfg.DBKeyFilename = filepath.Join(cfg.HomeDir, defaultDBKeyFilename)
+	} else {
+		cfg.DBKeyFilename = cleanAndExpandPath(cfg.DBKeyFilename)
+	}
+
+	// Check if the key file exists.
+	if !util.FileExists(cfg.DBKeyFilename) {
+		return fmt.Errorf("You must specify a valid database key or create " +
+			"a new one by using the --createdbkey flag")
+	}
+
+	// Load the DB key
+	ek, err := database.LoadEncryptionKey(cfg.DBKeyFilename)
+	if err != nil {
+		return err
+	}
+	cfg.DBKey = ek
+
+	log.Infof("Database key loaded from: %v", cfg.DBKeyFilename)
 	return nil
 }
 
@@ -642,13 +624,6 @@ func loadConfig() (*config, []string, error) {
 		return nil, nil, fmt.Errorf("Invalid database option")
 	}
 
-	if cfg.DBKey == "" {
-		err = setupDatabaseKey(&cfg)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
 	// Special show command to list supported subsystems and exit.
 	if cfg.DebugLevel == "show" {
 		fmt.Println("Supported subsystems", supportedSubsystems())
@@ -739,6 +714,10 @@ func loadConfig() (*config, []string, error) {
 	}
 
 	if err := loadIdentity(&cfg); err != nil {
+		return nil, nil, err
+	}
+
+	if err := loadDBKey(&cfg); err != nil {
 		return nil, nil, err
 	}
 

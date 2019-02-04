@@ -43,6 +43,10 @@ var (
 	// ErrWrongRecordType is emitted when the record type in the database
 	// does not match the expected type
 	ErrWrongRecordType = errors.New("wrong record type")
+
+	// ErrWrongEncryptionKey is emitted when the database record cannot
+	// be decrypted with the provided key
+	ErrWrongEncryptionKey = errors.New("Invalid database encryption key")
 )
 
 const (
@@ -51,10 +55,6 @@ const (
 
 	// DatabaseVersionKey is the key used to map the database version
 	DatabaseVersionKey = "userversion"
-
-	// DefaultEncryptionKeyFilename is the name of the file where
-	// the encryption key is stored
-	DefaultEncryptionKeyFilename = "dbkey.json"
 
 	// LastPaywallAddressIndexKey is the key used to map the last paywall index
 	// for a user

@@ -6,7 +6,6 @@ package database
 
 import (
 	"io/ioutil"
-	"path/filepath"
 	"time"
 
 	"github.com/marcopeereboom/sbox"
@@ -50,7 +49,7 @@ func LoadEncryptionKey(filename string) (*EncryptionKey, error) {
 
 // NewEncryptionKey creates and save a new encription key in the provided
 // directory.
-func NewEncryptionKey(dir string) error {
+func NewEncryptionKey(filename string) error {
 	secretKey, err := sbox.NewKey()
 	if err != nil {
 		return err
@@ -59,5 +58,5 @@ func NewEncryptionKey(dir string) error {
 	return SaveEncryptionKey(EncryptionKey{
 		Key:  *secretKey,
 		Time: time.Now().Unix(),
-	}, filepath.Join(dir, DefaultEncryptionKeyFilename))
+	}, filename)
 }
