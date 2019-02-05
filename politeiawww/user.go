@@ -130,24 +130,18 @@ func (b *backend) UserNew(u database.User) (*uuid.UUID, error) {
 func (b *backend) UserGetByEmail(email string) (*database.User, error) {
 	log.Tracef("UserGet: %v", email)
 
-	var user *database.User
+	// var user *database.User
 
-	err := b.AllUsers(func(u *database.User) {
-		if u.Email == strings.ToLower(email) {
-			user = u
-		}
-	})
-	if err != nil {
-		return nil, err
-	}
-	if user == nil {
-		// user not found
+	b.RLock()
+	userID, ok := b.userEmail[strings.ToLower(email)]
+	b.RUnlock()
+	if !ok {
 		return nil, www.UserError{
 			ErrorCode: www.ErrorStatusUserNotFound,
 		}
 	}
 
-	return user, nil
+	return b.UserGetByIDStr(userID)
 }
 
 // UserGetByUsername returns a user record given its username, if found in the
@@ -155,18 +149,16 @@ func (b *backend) UserGetByEmail(email string) (*database.User, error) {
 func (b *backend) UserGetByUsername(username string) (*database.User, error) {
 	log.Tracef("UserGetByUsername: %v", username)
 
-	var user *database.User
-
-	err := b.AllUsers(func(u *database.User) {
-		if u.Username == username {
-			user = u
+	b.RLock()
+	userID, ok := b.userUsername[strings.ToLower(username)]
+	b.RUnlock()
+	if !ok {
+		return nil, www.UserError{
+			ErrorCode: www.ErrorStatusUserNotFound,
 		}
-	})
-	if err != nil {
-		return nil, err
 	}
 
-	return user, nil
+	return b.UserGetByIDStr(userID)
 }
 
 // UserUpdate updates an existing user in the database

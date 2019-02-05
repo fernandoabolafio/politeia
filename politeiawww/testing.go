@@ -83,6 +83,8 @@ func createBackend(t *testing.T) *backend {
 		params:          &chaincfg.TestNet3Params,
 		test:            true,
 		userPubkeys:     make(map[string]string),
+		userEmail:       make(map[string]string),
+		userUsername:    make(map[string]string),
 		userPaywallPool: make(map[uuid.UUID]paywallPoolMember),
 		commentScores:   make(map[string]int64),
 	}

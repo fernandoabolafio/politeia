@@ -81,6 +81,8 @@ type backend struct {
 
 	// Following entries require locks
 	userPubkeys     map[string]string               // [pubkey][userid]
+	userEmail       map[string]string               // [email][userid]
+	userUsername    map[string]string               // [username][userid]
 	userPaywallPool map[uuid.UUID]paywallPoolMember // [userid][paywallPoolMember]
 	commentScores   map[string]int64                // [token+commentID]resultVotes
 }
@@ -393,28 +395,95 @@ func (b *backend) login(l *www.Login) loginReplyWithError {
 	}
 }
 
-// initUserPubkeys initializes the userPubkeys map with all the pubkey-userid
-// associations that are found in the database.
+// initUserCache initializes all the user caches in the backend
+// by iterating over all user records in the database.
 //
 // This function must be called WITHOUT the lock held.
-func (b *backend) initUserPubkeys() error {
+func (b *backend) initUserCache() error {
 	b.Lock()
 	defer b.Unlock()
 
 	return b.AllUsers(func(u *database.User) {
-		userId := u.ID.String()
-		for _, v := range u.Identities {
-			key := hex.EncodeToString(v.Key[:])
-			b.userPubkeys[key] = userId
-		}
+		b._loadUserPubkeysAssociation(u)
+		b._setUserEmailAssociation(u)
+		b._setUserUsernameAssociation(u)
 	})
 }
 
-// setUserPubkeyAssociaton associates a public key with a user id in
+// setUserEmailAssoaction associates an email with a user id in the
+// userEmail cache.
+//
+// THis function must be called WITHOUT the lock held.
+func (b *backend) setUserEmailAssociation(user *database.User) {
+	b.Lock()
+	defer b.Unlock()
+	b._setUserEmailAssociation(user)
+}
+
+// _setUserEmailAssoaction associates an email with a user id in the
+// userEmail cache.
+//
+// This function must be called WITH the lock held.
+func (b *backend) _setUserEmailAssociation(user *database.User) {
+	userID := user.ID.String()
+	b.userEmail[user.Email] = userID
+}
+
+// removeUserEmailAssociation removes a email from the userEmail cache.
+//
+// This function must be called WITHOUT the lock held.
+func (b *backend) removeUserEmailAssociation(email string) {
+	b.Lock()
+	defer b.Unlock()
+
+	delete(b.userEmail, email)
+}
+
+// setUserUsernameAssoaction associates an username with a user id in the
+// userUsername cache.
+//
+// This function must be called WITHOUT the lock held.
+func (b *backend) setUserUsernameAssociation(user *database.User) {
+	b.Lock()
+	defer b.Unlock()
+	b._setUserUsernameAssociation(user)
+}
+
+// _setUserUsernameAssoaction associates an username with a user id in the
+// userUsername cache.
+//
+// This function must be called WITH the lock held.
+func (b *backend) _setUserUsernameAssociation(user *database.User) {
+	userID := user.ID.String()
+	b.userUsername[user.Username] = userID
+}
+
+// removeUserUsernameAssociation removes a username from the userUsername cache.
+//
+// This function must be called WITHOUT the lock held.
+func (b *backend) removeUserUsernameAssociation(username string) {
+	b.Lock()
+	defer b.Unlock()
+
+	delete(b.userUsername, username)
+}
+
+// _loadUserPubkeys loads all the user public keys in the userPubkeys cache
+//
+// This function must be called WITH the lock held.
+func (b *backend) _loadUserPubkeysAssociation(user *database.User) {
+	userID := user.ID.String()
+	for _, v := range user.Identities {
+		key := hex.EncodeToString(v.Key[:])
+		b.userPubkeys[key] = userID
+	}
+}
+
+// setUserPubkeyAssociation associates a public key with a user id in
 // the userPubkeys cache.
 //
 // This function must be called WITHOUT the lock held.
-func (b *backend) setUserPubkeyAssociaton(user *database.User, publicKey string) {
+func (b *backend) setUserPubkeyAssociation(user *database.User, publicKey string) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -422,11 +491,11 @@ func (b *backend) setUserPubkeyAssociaton(user *database.User, publicKey string)
 	b.userPubkeys[publicKey] = userID
 }
 
-// removeUserPubkeyAssociaton removes a public key from the
+// removeUserPubkeyAssociation removes a public key from the
 // userPubkeys cache.
 //
 // This function must be called WITHOUT the lock held.
-func (b *backend) removeUserPubkeyAssociaton(user *database.User, publicKey string) {
+func (b *backend) removeUserPubkeyAssociation(user *database.User, publicKey string) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -557,7 +626,7 @@ func (b *backend) validateUsername(username string, userToMatch *database.User) 
 	}
 
 	user, err := b.UserGetByUsername(username)
-	if err != nil {
+	if err != nil && !IsUserNotFoundError(err) {
 		return err
 	}
 	if user != nil {
@@ -1011,7 +1080,7 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 	var uid *uuid.UUID
 	if existingUser != nil {
 		existingPublicKey := hex.EncodeToString(existingUser.Identities[0].Key[:])
-		b.removeUserPubkeyAssociaton(existingUser, existingPublicKey)
+		b.removeUserPubkeyAssociation(existingUser, existingPublicKey)
 
 		// Update the user in the db.
 		newUser.ID = existingUser.ID
@@ -1040,7 +1109,11 @@ func (b *backend) ProcessNewUser(u www.NewUser) (*www.NewUserReply, error) {
 	}
 
 	// Associate the user id with the new public key.
-	b.setUserPubkeyAssociaton(existingUser, u.PublicKey)
+	b.setUserPubkeyAssociation(existingUser, u.PublicKey)
+	// Associate the user id with the new email.
+	b.setUserEmailAssociation(existingUser)
+	// Associate the user id with the new username.
+	b.setUserUsernameAssociation(existingUser)
 
 	// Derive paywall information for this user if the paywall is enabled.
 	err = b.GenerateNewUserPaywall(existingUser)
@@ -1198,13 +1271,13 @@ func (b *backend) ProcessResendVerification(rv *www.ResendVerification) (*www.Re
 
 	// Remove the original pubkey from the cache.
 	existingPublicKey := hex.EncodeToString(user.Identities[0].Key[:])
-	b.removeUserPubkeyAssociaton(user, existingPublicKey)
+	b.removeUserPubkeyAssociation(user, existingPublicKey)
 
 	// Set a new verificaton token and identity.
 	b.setNewUserVerificationAndIdentity(user, token, expiry, true, pk)
 
 	// Associate the user id with the new identity.
-	b.setUserPubkeyAssociaton(user, rv.PublicKey)
+	b.setUserPubkeyAssociation(user, rv.PublicKey)
 
 	// Update the user in the db.
 	err = b.UserUpdate(*user)
@@ -1352,7 +1425,7 @@ func (b *backend) ProcessVerifyUpdateUserKey(user *database.User, vu www.VerifyU
 	}
 
 	// Associate the user id with the new public key.
-	b.setUserPubkeyAssociaton(user, pi.String())
+	b.setUserPubkeyAssociation(user, pi.String())
 
 	// Clear out the verification token fields in the db and activate
 	// the key and deactivate the one it's replacing.
@@ -1433,12 +1506,18 @@ func (b *backend) ProcessChangeUsername(email string, cu www.ChangeUsername) (*w
 		return nil, err
 	}
 
+	oldUsername := user.Username
+
 	// Add the updated user information to the db.
 	user.Username = newUsername
 	err = b.UserUpdate(*user)
 	if err != nil {
 		return nil, err
 	}
+
+	// Update userUsername cache.
+	b.removeUserUsernameAssociation(oldUsername)
+	b.setUserUsernameAssociation(user)
 
 	return &reply, nil
 }
@@ -2059,6 +2138,8 @@ func NewBackend(cfg *config) (*backend, error) {
 		cache:           cdb,
 		cfg:             cfg,
 		userPubkeys:     make(map[string]string),
+		userEmail:       make(map[string]string),
+		userUsername:    make(map[string]string),
 		userPaywallPool: make(map[uuid.UUID]paywallPoolMember),
 		commentScores:   make(map[string]int64),
 	}
@@ -2081,9 +2162,9 @@ func NewBackend(cfg *config) (*backend, error) {
 	log.Infof("Registered plugin: decred")
 
 	// Setup pubkey-userid map
-	err = b.initUserPubkeys()
+	err = b.initUserCache()
 	if err != nil {
-		return nil, fmt.Errorf("initUserPubkeys: %v", err)
+		return nil, fmt.Errorf("initUserCache: %v", err)
 	}
 
 	// Setup comment scores map
