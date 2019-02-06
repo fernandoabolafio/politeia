@@ -141,7 +141,7 @@ type config struct {
 	DBHost                   string `long:"dbhost" description:"Database ip:port"`
 	DBCertDir                string `long:"dbcertdir" description:"Directory containing SSL client certificates"`
 	DBRootCert               string `long:"dbrootcert" description:"File containing SSL root certificate"`
-	DBKeyFilename            string `long:"dbkeyfilename" description:"File containing the secret sey for database encryption"`
+	DBKeyFilename            string `long:"dbkeyfilename" description:"File containing the secret key for database encryption"`
 	CreateDBKey              bool   `long:"createdbkey" description:"Create a new database key in the provided path"`
 	FetchIdentity            bool   `long:"fetchidentity" description:"Whether or not politeiawww fetches the identity from politeiad."`
 	WebServerAddress         string `long:"webserveraddress" description:"Address for the Politeia web server; it should have this format: <scheme>://<host>[:<port>]"`

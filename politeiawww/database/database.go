@@ -62,6 +62,14 @@ const (
 	RecordTypeLastPaywallAddrIdx RecordTypeT = 3 // LastPaywallAddressIndex record type
 )
 
+// Snapshot wraps the database snapshot, the time when it was created
+// and the version of the database.
+type Snapshot struct {
+	Snapshot map[string][]byte // The database snapshot
+	Time     int64             // Time when the snapshot was created
+	Version  uint32            // Database version when the snapshot was created
+}
+
 // EncryptionKey wraps a key used for encrypting/decrypting the database
 // data and the time when it was created.
 type EncryptionKey struct {
@@ -187,6 +195,7 @@ type Database interface {
 	Get(string) ([]byte, error)                   // Get a database value by key
 	Has(string) (bool, error)                     // Returns true if the database has a key
 	GetAll(callbackFn func(string, []byte)) error // Iterate all database values
+	GetSnapshot() (*Snapshot, error)              // Get snapshot of the db at a particular point in time
 
 	Open() error  // Open a new database connection
 	Close() error // Close the database connection

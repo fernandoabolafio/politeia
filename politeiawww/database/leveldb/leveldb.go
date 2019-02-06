@@ -125,6 +125,45 @@ func (l *leveldb) Has(key string) (bool, error) {
 	return l.userdb.Has([]byte(key), nil)
 }
 
+// GetSnapshot returns a snapshot from the entire database.
+func (l *leveldb) GetSnapshot() (*database.Snapshot, error) {
+	l.RLock()
+	shutdown := l.shutdown
+	l.RUnlock()
+
+	if shutdown {
+		return nil, database.ErrShutdown
+	}
+
+	// Get leveldb snapshot.
+	userdbSnapshot, err := l.userdb.GetSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	defer userdbSnapshot.Release()
+
+	snapshot := database.Snapshot{
+		Time:     time.Now().Unix(),
+		Version:  database.DatabaseVersion,
+		Snapshot: make(map[string][]byte),
+	}
+
+	iter := userdbSnapshot.NewIterator(nil, nil)
+	for iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Decrypt the record payload.
+		decValue, _, err := database.Decrypt(l.encryptionKey.Key, value)
+		if err != nil {
+			return nil, err
+		}
+		snapshot.Snapshot[string(key)] = decValue
+	}
+
+	return &snapshot, nil
+}
+
 // Open opens a new database connection and make sure there is a version record
 // stored in the database. If the version record already exists, it will try to
 // decrypt it to verify that the encryption key is valid; otherwise a new version
@@ -154,29 +193,19 @@ func (l *leveldb) Open() error {
 			return err
 		}
 
-		// Encrypt and save record.
-		packed, err := database.Encrypt(database.DatabaseVersion,
-			l.encryptionKey.Key, payload)
-		if err != nil {
-			return err
-		}
-
-		return l.Put(database.DatabaseVersionKey, packed)
-	} else {
-		// Version record already exists, so we check if the encryption key
-		// is valid.
-		_, version, err := database.Decrypt(l.encryptionKey.Key, payload)
-		if err != nil {
-			return database.ErrWrongEncryptionKey
-		}
-		// Also check if the record version matches the interface implementation
-		// version.
-		if version != database.DatabaseVersion {
-			return database.ErrWrongVersion
-		}
+		return l.Put(database.DatabaseVersionKey, payload)
+	} else if err != nil {
+		return err
+	}
+	version, err := database.DecodeVersion(payload)
+	if err != nil {
+		return err
+	}
+	if version.Version != database.DatabaseVersion {
+		return database.ErrWrongVersion
 	}
 
-	return err
+	return nil
 }
 
 // Close shuts down the database.  All interface functions MUST return with

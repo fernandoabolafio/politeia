@@ -2110,9 +2110,9 @@ func setupDatabase(b *backend) error {
 		log.Infof("Users database is using cockroachdb")
 		b.db = db
 		return nil
-	default:
-		return fmt.Errorf("Invalid database configuration")
 	}
+
+	return fmt.Errorf("Invalid database configuration")
 }
 
 // NewBackend creates a new backend context for use in www and tests.

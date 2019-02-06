@@ -5,7 +5,6 @@
 package cockroachdb
 
 import (
-	"fmt"
 	"net/url"
 	"path/filepath"
 	"sync"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/decred/politeia/politeiawww/database"
 	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 const (
@@ -206,6 +206,52 @@ func (c *cockroachdb) Has(key string) (bool, error) {
 
 }
 
+// GetSnapshot returns a snapshot from the entire database.
+func (c *cockroachdb) GetSnapshot() (*database.Snapshot, error) {
+	log.Tracef("GetSnapshot")
+
+	c.RLock()
+	shutdown := c.shutdown
+	c.RUnlock()
+
+	if shutdown {
+		return nil, database.ErrShutdown
+	}
+
+	// Build the db snapshot within a transaction.
+	tx := c.usersdb.Begin()
+	snapshot := database.Snapshot{
+		Time:     time.Now().Unix(),
+		Version:  database.DatabaseVersion,
+		Snapshot: make(map[string][]byte),
+	}
+
+	// Find all values in the database.
+	var values []KeyValue
+	err := tx.Find(&values).Error
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	for _, v := range values {
+		// Decrypt the record payload.
+		decValue, _, err := database.Decrypt(c.encryptionKey.Key, v.Payload)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		snapshot.Snapshot[v.Key] = decValue
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &snapshot, nil
+}
+
 // Open opens a new database connection and make sure there is a version record
 // stored in the database. If the version record already exists, it will try to
 // decrypt it to verify that the encryption key is valid; otherwise a new version
@@ -235,29 +281,19 @@ func (c *cockroachdb) Open() error {
 			return err
 		}
 
-		// Encrypt and save record.
-		packed, err := database.Encrypt(database.DatabaseVersion,
-			c.encryptionKey.Key, payload)
-		if err != nil {
-			return err
-		}
-
-		return c.Put(database.DatabaseVersionKey, packed)
-	} else {
-		// Version record already exists, so we check if the encryption key
-		// is valid.
-		_, version, err := database.Decrypt(c.encryptionKey.Key, payload)
-		if err != nil {
-			return database.ErrWrongEncryptionKey
-		}
-		// Also check if the record version matches the interface implementation
-		// version.
-		if version != database.DatabaseVersion {
-			return database.ErrWrongVersion
-		}
+		return c.Put(database.DatabaseVersionKey, payload)
+	} else if err != nil {
+		return err
+	}
+	version, err := database.DecodeVersion(payload)
+	if err != nil {
+		return err
+	}
+	if version.Version != database.DatabaseVersion {
+		return database.ErrWrongVersion
 	}
 
-	return err
+	return nil
 }
 
 // Close shuts down the database.  All interface functions MUST return with
@@ -278,7 +314,6 @@ func (c *cockroachdb) Close() error {
 // already exist.
 func CreateCDB(host, net, rootCert, certDir string) error {
 	log.Tracef("Create cockroachDB: %v %v %v %v", host, net, rootCert, certDir)
-
 	// Connect to CockroachDB as root user. CockroachDB connects
 	// to defaultdb when a database is not specified.
 	h := "postgresql://root@" + host
@@ -292,14 +327,12 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 
 	addr := u.String() + "?" + qs
 
-	fmt.Print(addr)
-
 	db, err := gorm.Open("postgres", addr)
-	defer db.Close()
 	if err != nil {
 		log.Debugf("Create: could not connect to %v", addr)
 		return err
 	}
+	defer db.Close()
 
 	// Setup politeiawww database and users.
 	dbName := dbPrefix + net
