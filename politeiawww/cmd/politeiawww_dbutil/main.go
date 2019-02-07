@@ -21,30 +21,21 @@ type politeiawww_dbutil struct {
 func setupDatabase(p *politeiawww_dbutil) error {
 	cfg := p.cfg
 
-	// fmt.Printf("")
-	// Setup cockroach db for users database
 	switch cfg.Database {
 	case config.LevelDBOption:
-		err := leveldb.CreateLevelDB(cfg.DataDir)
-		if err != nil {
-			return fmt.Errorf("CreateLevelDB: %v", err)
-		}
-
-		db, err := leveldb.NewLevelDB(cfg.DataDir, cfg.DBKey)
+		db, err := leveldb.NewLevelDB(cfg.DataDir, cfg.DBKey, &leveldb.Config{
+			UseEncryption: cfg.UseDBEncryption,
+		})
 		if err != nil {
 			return fmt.Errorf("NewLevelDB: %v", err)
 		}
 		p.db = db
 		return nil
 	case config.CockroachDBOption:
-		err := cockroachdb.CreateCDB(cfg.DBHost, cfg.Net,
-			cfg.DBRootCert, cfg.DBCertDir)
-		if err != nil {
-			return fmt.Errorf("CreateCDB: %v", err)
-		}
-
 		db, err := cockroachdb.NewCDB(cockroachdb.UserPoliteiawww, cfg.DBHost,
-			cfg.Net, cfg.DBRootCert, cfg.DBCertDir, cfg.DBKey)
+			cfg.Net, cfg.DBRootCert, cfg.DBCertDir, cfg.DBKey, &cockroachdb.Config{
+				UseEncryption: cfg.UseDBEncryption,
+			})
 		if err != nil {
 			return fmt.Errorf("NewCDB: %v", err)
 		}
@@ -73,6 +64,7 @@ func _main() error {
 
 	// Set commands db.
 	commands.SetDatabase(dbutil.db)
+	commands.SetConfig(cfg)
 
 	// Parse subcommand and execute
 	var parser = flags.NewParser(&dbutil, flags.Default)

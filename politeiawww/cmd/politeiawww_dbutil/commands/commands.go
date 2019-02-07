@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/decred/politeia/politeiawww/cmd/politeiawwwcli/config"
+	"github.com/decred/politeia/politeiawww/cmd/politeiawww_dbutil/config"
 	"github.com/decred/politeia/politeiawww/database"
 )
 
@@ -23,9 +23,11 @@ func SetDatabase(database database.Database) {
 }
 
 type Cmds struct {
-	SetAdmin  SetAdminCmd  `command:"setadmin" description:"Set or revoke the admin rights of a user"`
-	Help      HelpCmd      `command:"help" description:"print detailed help message of specified command"`
-	DBVersion DBVersionCmd `command:"dbversion" description:"print the current version of the database"`
+	AddCredits AddCreditsCmd `command:"addcredits" description:"add the provided amount of credits to user's account"`
+	SetAdmin   SetAdminCmd   `command:"setadmin" description:"Set or revoke the admin rights of a user"`
+	Help       HelpCmd       `command:"help" description:"print detailed help message of specified command"`
+	DBVersion  DBVersionCmd  `command:"dbversion" description:"print the current version of the database"`
+	Dump       DumpCmd       `command:"dump" description:"dump the database content into the specified directory"`
 }
 
 // type Cmds struct {

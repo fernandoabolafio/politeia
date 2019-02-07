@@ -33,17 +33,18 @@ var (
 )
 
 type Config struct {
-	HomeDir       string `long:"appdata" description:"Path to application home directory"`
-	TestNet       bool   `long:"testnet" description:"Use the test network"`
-	Database      string `long:"database" description:"Database to be used. Valid options are {cockroachdb, leveldb}"`
-	DataDir       string `long:"datadir" description:"Directory where the database is stored"`
-	DBKeyFilename string `long:"dbkeyfilename" description:"File containing the secret key for the database"`
-	DBHost        string `long:"dbhost" description:"Database ip:port"`
-	DBCertDir     string `long:"dbcertdir" description:"Directory containing SSL client certificates"`
-	DBRootCert    string `long:"dbrootcert" description:"File containing SSL root certificate"`
-	RawJSON       bool   `short:"j" long:"json" description:"Print raw JSON output"`
-	ShowVersion   bool   `short:"V" long:"version" description:"Display version information and exit"`
-	Verbose       bool   `short:"v" long:"verbose" description:"Print verbose output"`
+	HomeDir         string `long:"appdata" description:"Path to application home directory"`
+	TestNet         bool   `long:"testnet" description:"Use the test network"`
+	Database        string `long:"database" description:"Database to be used. Valid options are {cockroachdb, leveldb}"`
+	DataDir         string `long:"datadir" description:"Directory where the database is stored"`
+	DBKeyFilename   string `long:"dbkeyfilename" description:"File containing the secret key for the database"`
+	DBHost          string `long:"dbhost" description:"Database ip:port"`
+	DBCertDir       string `long:"dbcertdir" description:"Directory containing SSL client certificates"`
+	DBRootCert      string `long:"dbrootcert" description:"File containing SSL root certificate"`
+	UseDBEncryption bool   `long:"usedbencryption" description:"If true the database will encrypt/decrypt for saving and retrieving records"`
+	RawJSON         bool   `short:"j" long:"json" description:"Print raw JSON output"`
+	ShowVersion     bool   `short:"V" long:"version" description:"Display version information and exit"`
+	Verbose         bool   `short:"v" long:"verbose" description:"Print verbose output"`
 
 	DBKey   *database.EncryptionKey
 	Net     string // // Which net is being used (mainnet/testnet)
@@ -65,10 +66,11 @@ type Config struct {
 func Load() (*Config, error) {
 	// Default config
 	cfg := Config{
-		HomeDir:  defaultHomeDir,
-		DataDir:  defaultDataDir,
-		Database: LevelDBOption,
-		Version:  version.String(),
+		HomeDir:         defaultHomeDir,
+		DataDir:         defaultDataDir,
+		Database:        LevelDBOption,
+		UseDBEncryption: true,
+		Version:         version.String(),
 	}
 
 	// Pre-parse the command line options to see if an alternative config
