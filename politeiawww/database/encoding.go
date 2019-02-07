@@ -158,3 +158,12 @@ func DecodeEncryptionKey(payload []byte) (*EncryptionKey, error) {
 
 	return &ek, nil
 }
+
+func EncodeSnapshot(s Snapshot) ([]byte, error) {
+	p, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}

@@ -72,7 +72,7 @@ func createBackend(t *testing.T) *backend {
 		t.Fatalf("lreate level db: %v", err)
 	}
 
-	db, err := leveldb.NewLevelDB(cfg.DataDir, key)
+	db, err := leveldb.NewLevelDB(cfg.DataDir, key, nil)
 	if err != nil {
 		t.Fatalf("new leveldb %v", err)
 	}

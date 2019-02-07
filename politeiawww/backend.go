@@ -2083,7 +2083,7 @@ func setupDatabase(b *backend) error {
 			return err
 		}
 
-		db, err := leveldb.NewLevelDB(cfg.DataDir, cfg.DBKey)
+		db, err := leveldb.NewLevelDB(cfg.DataDir, cfg.DBKey, nil)
 		if err != nil {
 			log.Debugf("could not instantiate level db")
 			return err
@@ -2100,7 +2100,7 @@ func setupDatabase(b *backend) error {
 		}
 
 		db, err := usercockroachdb.NewCDB(cockroachdb.UserPoliteiawww, cfg.DBHost,
-			net, cfg.DBRootCert, cfg.DBCertDir, cfg.DBKey)
+			net, cfg.DBRootCert, cfg.DBCertDir, cfg.DBKey, nil)
 		if err != nil {
 			return err
 		}

@@ -22,6 +22,12 @@ var (
 	_ database.Database = (*leveldb)(nil)
 )
 
+// Config defines a set of config options to be passed in when creating a new
+// leveldb context.
+type Config struct {
+	UseEncryption bool // Apply data encryption or not
+}
+
 // leveldb implements the database interface.
 type leveldb struct {
 	sync.RWMutex
@@ -29,6 +35,8 @@ type leveldb struct {
 	root          string                  // Database root
 	userdb        *ldb.DB                 // Database context
 	encryptionKey *database.EncryptionKey // Encryption key
+
+	cfg *Config // leveldb context config
 }
 
 // Put stores a payload by a given key.
@@ -43,13 +51,16 @@ func (l *leveldb) Put(key string, payload []byte) error {
 		return database.ErrShutdown
 	}
 
-	// Encrypt payload.
-	packed, err := database.Encrypt(database.DatabaseVersion, l.encryptionKey.Key, payload)
-	if err != nil {
-		return err
+	var err error
+	if l.cfg.UseEncryption {
+		// Encrypt payload.
+		payload, err = database.Encrypt(database.DatabaseVersion, l.encryptionKey.Key, payload)
+		if err != nil {
+			return err
+		}
 	}
 
-	return l.userdb.Put([]byte(key), packed, nil)
+	return l.userdb.Put([]byte(key), payload, nil)
 }
 
 // Get returns a payload by a given key.
@@ -65,7 +76,7 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 	}
 
 	// Try to find the record in the database.
-	packed, err := l.userdb.Get([]byte(key), nil)
+	payload, err := l.userdb.Get([]byte(key), nil)
 	if err == ldb.ErrNotFound {
 		return nil, database.ErrNotFound
 	}
@@ -73,8 +84,13 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
+	// Return the plain value if encryption is disabled.
+	if !l.cfg.UseEncryption {
+		return payload, nil
+	}
+
 	// Decrypt record.
-	payload, _, err := database.Decrypt(l.encryptionKey.Key, packed)
+	payload, _, err = database.Decrypt(l.encryptionKey.Key, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +113,11 @@ func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()
+
+		if !l.cfg.UseEncryption {
+			callbackFn(string(key), value)
+			continue
+		}
 
 		// Decrypt the record payload.
 		decValue, _, err := database.Decrypt(l.encryptionKey.Key, value)
@@ -152,6 +173,11 @@ func (l *leveldb) GetSnapshot() (*database.Snapshot, error) {
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()
+
+		if !l.cfg.UseEncryption {
+			snapshot.Snapshot[string(key)] = value
+			continue
+		}
 
 		// Decrypt the record payload.
 		decValue, _, err := database.Decrypt(l.encryptionKey.Key, value)
@@ -242,13 +268,21 @@ func CreateLevelDB(dataDir string) error {
 
 // NewLevelDB creates a new leveldb instance. It must be called after the Create
 // method, otherwise it will throw an error.
-func NewLevelDB(dataDir string, dbKey *database.EncryptionKey) (*leveldb, error) {
+func NewLevelDB(dataDir string, dbKey *database.EncryptionKey, cfg *Config) (*leveldb, error) {
 	log.Tracef("New LevelDB: %v %v", dataDir, dbKey)
+
+	// If config is not set we create a default one.
+	if cfg == nil {
+		cfg = &Config{
+			UseEncryption: true,
+		}
+	}
 
 	// Setup db context.
 	l := &leveldb{
 		root:          dataDir,
 		encryptionKey: dbKey,
+		cfg:           cfg,
 	}
 
 	err := l.Open()

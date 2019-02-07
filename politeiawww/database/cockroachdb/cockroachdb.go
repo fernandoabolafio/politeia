@@ -18,13 +18,13 @@ import (
 const (
 	dbPrefix = "users_"
 
-	// UserPoliteiawww is a database user with read/write access
+	// UserPoliteiawww is a database user with read/write access.
 	UserPoliteiawww = "politeiawww"
 
-	// Database table names
+	// Database table names.
 	tableKeyValue = "key_value"
 
-	// UserVersion is the curent database version
+	// UserVersion is the curent database version.
 	UserVersion uint32 = 1
 )
 
@@ -32,13 +32,21 @@ var (
 	_ database.Database = (*cockroachdb)(nil)
 )
 
-// cockroachdb implements the database interface
+// Config defines a set of config options to be passed in when creating a new
+// cockroachdb context.
+type Config struct {
+	UseEncryption bool // Apply data encryption or not
+}
+
+// cockroachdb implements the database interface.
 type cockroachdb struct {
 	sync.RWMutex
 	shutdown      bool                    // Backend is shutdown
 	usersdb       *gorm.DB                // Database context
 	encryptionKey *database.EncryptionKey // Encryption key
 	dbAddress     string                  // Database address
+
+	cfg *Config // cockroachdb context config
 }
 
 // buildDBQueryStirng assembles the certification query string contained
@@ -84,9 +92,12 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 	tx := c.usersdb.Begin()
 
 	// Encrypt payload.
-	packed, err := database.Encrypt(database.DatabaseVersion, c.encryptionKey.Key, payload)
-	if err != nil {
-		return err
+	var err error
+	if c.cfg.UseEncryption {
+		payload, err = database.Encrypt(database.DatabaseVersion, c.encryptionKey.Key, payload)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Try to find the record with the provided key.
@@ -96,7 +107,7 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 		// If the record is not found, create one
 		err = tx.Create(&KeyValue{
 			Key:     key,
-			Payload: packed,
+			Payload: payload,
 		}).Error
 		if err != nil {
 			tx.Rollback()
@@ -108,7 +119,7 @@ func (c *cockroachdb) Put(key string, payload []byte) error {
 	} else {
 		// Record found, update existent value.
 		err = tx.Model(&keyValue).Update(&KeyValue{
-			Payload: packed,
+			Payload: payload,
 		}).Error
 		if err != nil {
 			tx.Rollback()
@@ -141,7 +152,10 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Decrypt record.
+	if !c.cfg.UseEncryption {
+		return keyValue.Payload, nil
+	}
+
 	payload, _, err := database.Decrypt(c.encryptionKey.Key, keyValue.Payload)
 	if err != nil {
 		return nil, err
@@ -170,6 +184,11 @@ func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 	}
 	for _, v := range values {
 		// Decrypt the record payload.
+		if !c.cfg.UseEncryption {
+			callbackFn(v.Key, v.Payload)
+			continue
+		}
+
 		decValue, _, err := database.Decrypt(c.encryptionKey.Key, v.Payload)
 		if err != nil {
 			return err
@@ -236,6 +255,11 @@ func (c *cockroachdb) GetSnapshot() (*database.Snapshot, error) {
 
 	for _, v := range values {
 		// Decrypt the record payload.
+		if !c.cfg.UseEncryption {
+			snapshot.Snapshot[v.Key] = v.Payload
+			continue
+		}
+
 		decValue, _, err := database.Decrypt(c.encryptionKey.Key, v.Payload)
 		if err != nil {
 			tx.Rollback()
@@ -380,7 +404,7 @@ func CreateCDB(host, net, rootCert, certDir string) error {
 
 // NewCDB returns a new cockroachdb context which contains a connection to the
 // specified database that was made using the passed in user and certificates.
-func NewCDB(user, host, net, rootCert, certDir string, dbKey *database.EncryptionKey) (*cockroachdb, error) {
+func NewCDB(user, host, net, rootCert, certDir string, dbKey *database.EncryptionKey, cfg *Config) (*cockroachdb, error) {
 	log.Tracef("New CockroachDB: %v %v %v %v %v %v", user, host, net, rootCert, certDir)
 
 	// Connect to the database.
@@ -395,10 +419,18 @@ func NewCDB(user, host, net, rootCert, certDir string, dbKey *database.Encryptio
 
 	addr := u.String() + "?" + qs
 
+	// If config is not set we create a default one.
+	if cfg == nil {
+		cfg = &Config{
+			UseEncryption: true,
+		}
+	}
+
 	// Setup db context.
 	c := &cockroachdb{
 		dbAddress:     addr,
 		encryptionKey: dbKey,
+		cfg:           cfg,
 	}
 
 	// Open the database
