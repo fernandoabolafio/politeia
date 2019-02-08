@@ -189,24 +189,24 @@ func (b *backend) UserUpdate(u database.User) error {
 func (b *backend) AllUsers(callbackFn func(u *database.User)) error {
 	log.Tracef("AllUsers")
 
-	var gerr error
-	err := b.db.GetAll(func(key string, payload []byte) {
+	err := b.db.GetAll(func(key string, payload []byte) error {
 		if database.IsUserRecord(key) {
 			user, err := database.DecodeUser(payload)
 			if err != nil {
-				gerr = err
+				return err
 			} else if user != nil {
 				callbackFn(user)
 			}
 
 		}
+		return nil
 	})
 	if err != nil {
 		log.Tracef("AllUsers: %v", err)
 		return err
 	}
 
-	return gerr
+	return nil
 }
 
 // UserGetByID returns a user record given its ID, if found in the database.

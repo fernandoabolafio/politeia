@@ -152,10 +152,12 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 
+	// Return the record payload as it is if the encryption is disabled.
 	if !c.cfg.UseEncryption {
 		return keyValue.Payload, nil
 	}
 
+	// Decrypt the record payload.
 	payload, _, err := database.Decrypt(c.encryptionKey.Key, keyValue.Payload)
 	if err != nil {
 		return nil, err
@@ -164,9 +166,29 @@ func (c *cockroachdb) Get(key string) ([]byte, error) {
 	return payload, nil
 }
 
+// Remove removes a database record by the provided key.
+func (c *cockroachdb) Remove(key string) error {
+	log.Tracef("Remove: %v", key)
+
+	c.RLock()
+	shutdown := c.shutdown
+	c.RUnlock()
+
+	if shutdown {
+		return database.ErrShutdown
+	}
+
+	err := c.usersdb.Where("key = ?", key).Delete(KeyValue{}).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetAll iterates over the entire database, applying the provided callback
 // function for each record.
-func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
+func (c *cockroachdb) GetAll(callbackFn func(string, []byte) error) error {
 	log.Tracef("GetAll")
 
 	c.RLock()
@@ -185,7 +207,10 @@ func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 	for _, v := range values {
 		// Decrypt the record payload.
 		if !c.cfg.UseEncryption {
-			callbackFn(v.Key, v.Payload)
+			err := callbackFn(v.Key, v.Payload)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -193,7 +218,11 @@ func (c *cockroachdb) GetAll(callbackFn func(string, []byte)) error {
 		if err != nil {
 			return err
 		}
-		callbackFn(v.Key, decValue)
+
+		err = callbackFn(v.Key, decValue)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -308,13 +337,6 @@ func (c *cockroachdb) Open() error {
 		return c.Put(database.DatabaseVersionKey, payload)
 	} else if err != nil {
 		return err
-	}
-	version, err := database.DecodeVersion(payload)
-	if err != nil {
-		return err
-	}
-	if version.Version != database.DatabaseVersion {
-		return database.ErrWrongVersion
 	}
 
 	return nil

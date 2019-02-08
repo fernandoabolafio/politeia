@@ -191,11 +191,12 @@ type User struct {
 
 // Database interface
 type Database interface {
-	Put(string, []byte) error                     // Set a value by key
-	Get(string) ([]byte, error)                   // Get a database value by key
-	Has(string) (bool, error)                     // Returns true if the database has a key
-	GetAll(callbackFn func(string, []byte)) error // Iterate all database values
-	GetSnapshot() (*Snapshot, error)              // Get snapshot of the db at a particular point in time
+	Put(string, []byte) error                           // Set a record by key
+	Get(string) ([]byte, error)                         // Get a database record by key
+	Remove(string) error                                // Remove a record by key
+	Has(string) (bool, error)                           // Returns true if the database has a key
+	GetAll(callbackFn func(string, []byte) error) error // Iterate all database values
+	GetSnapshot() (*Snapshot, error)                    // Get snapshot of the db at a particular point in time
 
 	Open() error  // Open a new database connection
 	Close() error // Close the database connection

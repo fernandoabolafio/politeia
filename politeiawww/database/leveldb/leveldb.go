@@ -98,9 +98,22 @@ func (l *leveldb) Get(key string) ([]byte, error) {
 	return payload, nil
 }
 
+// Remove removes a database record by the provided key.
+func (l *leveldb) Remove(key string) error {
+	l.RLock()
+	shutdown := l.shutdown
+	l.RUnlock()
+
+	if shutdown {
+		return database.ErrShutdown
+	}
+
+	return l.userdb.Delete([]byte(key), nil)
+}
+
 // GetAll iterates over the entire database, applying the provided callback
 // function for each record.
-func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
+func (l *leveldb) GetAll(callbackFn func(string, []byte) error) error {
 	l.RLock()
 	shutdown := l.shutdown
 	l.RUnlock()
@@ -110,12 +123,17 @@ func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 	}
 
 	iter := l.userdb.NewIterator(nil, nil)
+	defer iter.Release()
+
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()
 
 		if !l.cfg.UseEncryption {
-			callbackFn(string(key), value)
+			err := callbackFn(string(key), value)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -125,9 +143,15 @@ func (l *leveldb) GetAll(callbackFn func(string, []byte)) error {
 			return err
 		}
 
-		callbackFn(string(key), decValue)
+		err = callbackFn(string(key), decValue)
+		if err != nil {
+			return err
+		}
+		// err = callbackFn(string(key), decValue)
+		// if err != nil {
+		// 	return err
+		// }
 	}
-	iter.Release()
 
 	return iter.Error()
 }
@@ -222,13 +246,6 @@ func (l *leveldb) Open() error {
 		return l.Put(database.DatabaseVersionKey, payload)
 	} else if err != nil {
 		return err
-	}
-	version, err := database.DecodeVersion(payload)
-	if err != nil {
-		return err
-	}
-	if version.Version != database.DatabaseVersion {
-		return database.ErrWrongVersion
 	}
 
 	return nil
