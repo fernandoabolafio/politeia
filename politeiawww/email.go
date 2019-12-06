@@ -20,7 +20,7 @@ import (
 const (
 	// This refers to a route for the GUI registration page.  It is used to fill
 	// in email messages giving the direct URL to the page for users to follow.
-	RegisterNewUserGuiRoute = "/register"
+	RegisterNewUserGuiRoute = "/user/signup"
 )
 
 func createBody(tpl *template.Template, tplData interface{}) (string, error) {
